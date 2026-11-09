@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HongBeautyPOS.Api/HongBeautyPOS.Api.csproj" />
+    <Project Path="src/HongBeautyPOS.Application/HongBeautyPOS.Application.csproj" />
+    <Project Path="src/HongBeautyPOS.Domain/HongBeautyPOS.Domain.csproj" />
+    <Project Path="src/HongBeautyPOS.Infrastructure/HongBeautyPOS.Infrastructure.csproj" />
+  </Folder>
+</Solution>

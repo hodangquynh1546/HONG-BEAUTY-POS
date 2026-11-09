@@ -25,9 +25,13 @@ Không lưu Owner password hoặc database URL thật vào Git. Bước bootstra
 - Cung cấp `DATABASE_URL` và `JWT_SECRET` qua biến môi trường; chạy `dotnet run --project HongBeautyPOSAPI/src/HongBeautyPOS.Api -- --migrate` trước lần đầu.
 - Chạy API bằng `dotnet run --project HongBeautyPOSAPI/src/HongBeautyPOS.Api --launch-profile http` (mặc định cổng 5024).
 - Trong `HongBeautyPOSUI`, chạy `bun install` rồi `bun run start`; proxy `/api` chuyển đến API cổng 5024.
-- Kiểm thử: `dotnet test HongBeautyPOSAPI/HongBeautyPOS.slnx` và `bun run build` trong thư mục UI.
+- Kiểm tra bản dựng: `dotnet build HongBeautyPOSAPI/HongBeautyPOS.slnx` và `bun run build` trong thư mục UI.
 - Kiểm thử tích hợp trên **database PostgreSQL trống chỉ dành cho test**: sau khi build .NET, đặt `POS_TEST_DATABASE_URL` tới database đó rồi chạy `python3 tests/integration_smoke.py`. Bài test tự tạo Owner ngẫu nhiên và dữ liệu giao dịch; không chạy trên database production. Script chỉ chấp nhận host localhost.
 
 ## Lưu ý triển khai
 
 Production chưa sẵn sàng. Luồng cốt lõi đã được kiểm thử trên PostgreSQL cục bộ, nhưng Docker, build native Android/iOS và các phân hệ còn thiếu trong `PROJECT_STATUS.md` chưa được xác minh. Chưa nên dùng cho dữ liệu kinh doanh thật.
+
+## Render và Neon
+
+`render.yaml` định nghĩa một dịch vụ Docker chạy web và API cùng địa chỉ, tự áp dụng migration trước khi nhận truy cập. Xem [hướng dẫn triển khai](docs/DEPLOYMENT.md) để nhập biến môi trường và tạo tài khoản Chủ sở hữu lần đầu. Cấu hình đã được build cục bộ; chưa kiểm thử trên Render/Neon thực tế.

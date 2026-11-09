@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: mieu-pos
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://+:8080
+      - key: RUN_MIGRATIONS_ON_START
+        value: "true"
+      - key: BOOTSTRAP_OWNER_ON_START
+        value: "true"
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://localhost,capacitor://localhost
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: OWNER_EMAIL
+        sync: false
+      - key: OWNER_NAME
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false

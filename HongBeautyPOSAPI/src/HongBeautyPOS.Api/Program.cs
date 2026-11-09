@@ -81,7 +81,10 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.MapGet("/health", async (PosDbContext db) =>
 {
-    return await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503);
+    if (!await db.Database.CanConnectAsync()) return Results.StatusCode(503);
+    return (await db.Database.GetPendingMigrationsAsync()).Any()
+        ? Results.StatusCode(503)
+        : Results.Ok(new { status = "ok" });
 });
 if (app.Environment.IsDevelopment())
 {
@@ -113,6 +116,29 @@ if (args.Contains("--bootstrap-owner", StringComparer.Ordinal))
     await db.SaveChangesAsync();
     Console.WriteLine("Owner account created");
     return;
+}
+
+if (string.Equals(Environment.GetEnvironmentVariable("RUN_MIGRATIONS_ON_START"), "true", StringComparison.OrdinalIgnoreCase))
+{
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<PosDbContext>().Database.MigrateAsync();
+}
+
+if (string.Equals(Environment.GetEnvironmentVariable("BOOTSTRAP_OWNER_ON_START"), "true", StringComparison.OrdinalIgnoreCase))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<PosDbContext>();
+    if (!await db.Users.AnyAsync(u => u.Role == UserRole.Owner))
+    {
+        var email = Environment.GetEnvironmentVariable("OWNER_EMAIL")?.Trim().ToLowerInvariant();
+        var name = Environment.GetEnvironmentVariable("OWNER_NAME")?.Trim();
+        var password = Environment.GetEnvironmentVariable("OWNER_PASSWORD");
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(name) || password is null || password.Length < 14 ||
+            !password.Any(char.IsUpper) || !password.Any(char.IsLower) || !password.Any(char.IsDigit) || password.All(char.IsLetterOrDigit))
+            throw new InvalidOperationException("OWNER_EMAIL, OWNER_NAME and a strong OWNER_PASSWORD are required for initial setup");
+        db.Users.Add(new User { Email = email, FullName = name, PasswordHash = BCrypt.Net.BCrypt.HashPassword(password), Role = UserRole.Owner });
+        await db.SaveChangesAsync();
+    }
 }
 
 var api = app.MapGroup("/api/v1");

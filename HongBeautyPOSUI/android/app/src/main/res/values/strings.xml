@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Miêu</string>
+    <string name="title_activity_main">Miêu</string>
+    <string name="package_name">vn.hongbeauty.pos</string>
+    <string name="custom_url_scheme">vn.hongbeauty.pos</string>
+</resources>

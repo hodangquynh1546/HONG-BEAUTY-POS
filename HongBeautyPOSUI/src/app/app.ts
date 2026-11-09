@@ -2,10 +2,10 @@ import { Component, HostListener, OnInit, computed, signal } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type AttributeOption, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
+import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type AttributeOption, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type CustomerGroup, type Supplier, type CashEntry } from './core/api.service';
 
 type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit';
-type Overlay = 'account' | 'product' | 'category' | 'customer' | 'supplier' | 'employee' | 'permissions' | 'stock' | 'purchase' | 'cash' | 'return' | null;
+type Overlay = 'account' | 'product' | 'category' | 'customer' | 'supplier' | 'employee' | 'permissions' | 'stock' | 'purchase' | 'cash' | 'return' | 'auditDetail' | null;
 
 @Component({
   selector: 'app-root',
@@ -21,6 +21,7 @@ export class App implements OnInit {
   private resolveConfirmation: ((accepted: boolean) => void) | null = null;
   readonly forgotPasswordInfo = signal(false);
   profileName = '';
+  profileAvatarData = '';
   currentPassword = '';
   newPassword = '';
   confirmPassword = '';
@@ -36,6 +37,10 @@ export class App implements OnInit {
   quickAttributeName = '';
   quickAttributeValues = '';
   readonly customers = signal<Customer[]>([]);
+  readonly customerGroups = signal<CustomerGroup[]>([]);
+  readonly selectedAuditEvent = signal<AuditEvent | null>(null);
+  quickCustomerGroupOpen = false;
+  quickCustomerGroupName = '';
   readonly customerTotal = signal(0);
   readonly posCustomers = signal<Customer[]>([]);
   readonly suppliers = signal<Supplier[]>([]);
@@ -63,7 +68,18 @@ export class App implements OnInit {
   readonly paymentMethodReport = signal<PaymentMethodReport[]>([]);
   readonly topProductsReport = signal<TopProductReport[]>([]);
   readonly dailyTrend = signal<DailyReportPoint[]>([]);
-  readonly chartPoints = computed(() => this.dailyTrend().slice(-31));
+  readonly monthlyChart = signal(false);
+  readonly chartPoints = computed(() => {
+    const points = this.dailyTrend();
+    if (!this.monthlyChart()) return points.slice(-31);
+    const months = new Map<string, DailyReportPoint>();
+    for (const point of points) {
+      const key = point.date.slice(0, 7);
+      const current = months.get(key) ?? { date: key + '-01', grossSales: 0, returnedSales: 0, netRevenue: 0, cashIn: 0, cashOut: 0, netCashFlow: 0 };
+      months.set(key, { ...current, grossSales: current.grossSales + point.grossSales, returnedSales: current.returnedSales + point.returnedSales, netRevenue: current.netRevenue + point.netRevenue, cashIn: current.cashIn + point.cashIn, cashOut: current.cashOut + point.cashOut, netCashFlow: current.netCashFlow + point.netCashFlow });
+    }
+    return [...months.values()].slice(-12);
+  });
   readonly revenueScale = computed(() => Math.max(1, ...this.chartPoints().map(point => Math.abs(point.netRevenue))));
   readonly cashScale = computed(() => Math.max(1, ...this.chartPoints().flatMap(point => [point.cashIn, point.cashOut])));
   readonly returnLines = signal<OrderLine[]>([]);
@@ -80,7 +96,7 @@ export class App implements OnInit {
   editingProductId = '';
   newCategory = { name: '', parentId: '' };
   editingCategoryId = '';
-  newCustomer = { fullName: '', phone: '', email: '' };
+  newCustomer = { fullName: '', phone: '', phone2: '', email: '', gender: '', address: '', contact: '', notes: '', groupId: '', avatarData: '' };
   editingCustomerId = '';
   customerSearch = '';
   posCustomerSearch = '';
@@ -137,6 +153,7 @@ export class App implements OnInit {
     this.serverUrlInput = this.api.serverUrl();
     await this.api.restore();
     this.profileName = this.api.user()?.fullName ?? '';
+    this.profileAvatarData = this.api.user()?.avatarData ?? '';
     if (this.api.user()) await this.refresh();
     if (!this.pendingOrderId) this.paymentAmount = this.cartTotal();
   }
@@ -187,7 +204,7 @@ export class App implements OnInit {
   createCustomer(): void { this.cancelCustomerEdit(); this.openOverlay('customer'); }
   createSupplier(): void { this.cancelSupplierEdit(); this.openOverlay('supplier'); }
 
-  async chooseProductImage(event: Event): Promise<void> {
+  async chooseProductImage(event: Event, target: 'product' | 'customer' | 'profile' = 'product'): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -209,7 +226,9 @@ export class App implements OnInit {
       let image = canvas.toDataURL('image/jpeg', .78);
       if (image.length > 210_000) image = canvas.toDataURL('image/jpeg', .55);
       if (image.length > 210_000) throw new Error('Ảnh sau khi nén vẫn quá lớn. Hãy chọn ảnh đơn giản hơn.');
-      this.newProduct.imageData = image;
+      if (target === 'product') this.newProduct.imageData = image;
+      else if (target === 'customer') this.newCustomer.avatarData = image;
+      else this.profileAvatarData = image;
       this.error.set('');
     } catch (error) { this.error.set(error instanceof Error ? error.message : 'Không đọc được ảnh.'); }
     finally { URL.revokeObjectURL(url); input.value = ''; }
@@ -246,9 +265,9 @@ export class App implements OnInit {
   async saveProfile(): Promise<void> {
     this.loading.set(true); this.error.set(''); this.notice.set('');
     try {
-      await this.api.put('/me/profile', { fullName: this.profileName });
+      await this.api.put('/me/profile', { fullName: this.profileName, avatarData: this.profileAvatarData });
       this.api.user.set(await this.api.get<CurrentUser>('/me'));
-      this.notice.set('Đã cập nhật tên tài khoản.');
+      this.notice.set('Đã cập nhật tài khoản.');
     } catch { this.error.set('Không cập nhật được tên. Vui lòng kiểm tra lại.'); }
     finally { this.loading.set(false); }
   }
@@ -385,6 +404,7 @@ export class App implements OnInit {
       }
       if (this.api.can('customers.read')) {
         await attempt('khách hàng', async () => this.loadCustomers(true));
+        await attempt('nhóm khách hàng', async () => this.customerGroups.set(await this.api.get<CustomerGroup[]>('/customer-groups')));
         await attempt('khách tại quầy', async () => this.loadPosCustomers());
       }
       if (this.api.can('suppliers.read')) await attempt('nhà cung cấp', async () => this.suppliers.set(await this.api.get<Supplier[]>('/suppliers')));
@@ -494,20 +514,35 @@ export class App implements OnInit {
 
   editCustomer(customer: Customer): void {
     this.editingCustomerId = customer.id;
-    this.newCustomer = { fullName: customer.fullName, phone: customer.phone ?? '', email: customer.email ?? '' };
+    this.newCustomer = { fullName: customer.fullName, phone: customer.phone ?? '', phone2: customer.phone2 ?? '', email: customer.email ?? '', gender: customer.gender ?? '', address: customer.address ?? '', contact: customer.contact ?? '', notes: customer.notes ?? '', groupId: customer.groupId ?? '', avatarData: customer.avatarData ?? '' };
     this.openOverlay('customer');
   }
 
   cancelCustomerEdit(): void {
     this.editingCustomerId = '';
-    this.newCustomer = { fullName: '', phone: '', email: '' };
+    this.newCustomer = { fullName: '', phone: '', phone2: '', email: '', gender: '', address: '', contact: '', notes: '', groupId: '', avatarData: '' };
+    this.quickCustomerGroupOpen = false;
+  }
+
+  customerGroupName(id: string | null): string { return this.customerGroups().find(x => x.id === id)?.name ?? 'Chưa phân nhóm'; }
+
+  async addQuickCustomerGroup(): Promise<void> {
+    if (!this.quickCustomerGroupName.trim()) return;
+    this.loading.set(true); this.error.set('');
+    try {
+      const group = await this.api.post<CustomerGroup>('/customer-groups', { name: this.quickCustomerGroupName.trim() });
+      this.customerGroups.set([...this.customerGroups(), group].sort((a, b) => a.name.localeCompare(b.name, 'vi')));
+      this.newCustomer.groupId = group.id;
+      this.quickCustomerGroupName = ''; this.quickCustomerGroupOpen = false;
+    } catch { this.error.set('Không tạo được nhóm khách hàng. Tên có thể đã tồn tại.'); }
+    finally { this.loading.set(false); }
   }
 
   async saveCustomer(): Promise<void> {
     this.loading.set(true); this.error.set('');
     try {
-      if (this.editingCustomerId) await this.api.put(`/customers/${this.editingCustomerId}`, this.newCustomer);
-      else await this.api.post('/customers', this.newCustomer);
+      if (this.editingCustomerId) await this.api.put(`/customers/${this.editingCustomerId}`, { ...this.newCustomer, groupId: this.newCustomer.groupId || null, gender: this.newCustomer.gender || null });
+      else await this.api.post('/customers', { ...this.newCustomer, groupId: this.newCustomer.groupId || null, gender: this.newCustomer.gender || null });
       this.notice.set(this.editingCustomerId ? 'Đã cập nhật khách hàng' : 'Đã tạo khách hàng');
       this.cancelCustomerEdit();
       this.overlay.set(null);
@@ -865,10 +900,10 @@ export class App implements OnInit {
       EMPLOYEE_DEACTIVATED: 'Khóa nhân viên', PRODUCT_UPDATED: 'Sửa sản phẩm',
       PRODUCT_ACTIVATED: 'Mở bán sản phẩm', PRODUCT_DEACTIVATED: 'Ngừng bán sản phẩm',
       CATEGORY_UPDATED: 'Sửa danh mục', CATEGORY_ACTIVATED: 'Mở danh mục', CATEGORY_DEACTIVATED: 'Ngừng danh mục',
-      CUSTOMER_UPDATED: 'Sửa khách hàng', CUSTOMER_ACTIVATED: 'Mở khách hàng', CUSTOMER_DEACTIVATED: 'Ngừng khách hàng',
+      CUSTOMER_UPDATED: 'Sửa khách hàng', CUSTOMER_ACTIVATED: 'Mở khách hàng', CUSTOMER_DEACTIVATED: 'Ngừng khách hàng', CUSTOMER_GROUP_CREATED: 'Tạo nhóm khách hàng',
       SUPPLIER_UPDATED: 'Sửa nhà cung cấp', SUPPLIER_ACTIVATED: 'Mở nhà cung cấp', SUPPLIER_DEACTIVATED: 'Ngừng nhà cung cấp',
       SALE_RETURN_CREATED: 'Tạo phiếu trả hàng', CASH_ENTRY_CREATED: 'Ghi phiếu thu chi',
-      PROFILE_UPDATED: 'Đổi tên tài khoản', PASSWORD_CHANGED: 'Đổi mật khẩu',
+      PROFILE_UPDATED: 'Cập nhật tài khoản', PASSWORD_CHANGED: 'Đổi mật khẩu',
       OWNER_PASSWORD_RECOVERED: 'Khôi phục mật khẩu Chủ sở hữu'
     };
     return labels[action] ?? 'Thao tác hệ thống';
@@ -934,13 +969,30 @@ export class App implements OnInit {
     return value === 0 ? 0 : Math.max(2, Math.abs(value) / this.revenueScale() * 100);
   }
 
+  methodBarWidth(value: number): number {
+    const max = Math.max(1, ...this.paymentMethodReport().map(x => Math.abs(x.net)));
+    return value === 0 ? 0 : Math.max(2, Math.abs(value) / max * 100);
+  }
+
+  productBarWidth(value: number): number {
+    const max = Math.max(1, ...this.topProductsReport().map(x => x.netQuantity));
+    return value <= 0 ? 0 : Math.max(2, value / max * 100);
+  }
+
   private async fetchReport(): Promise<void> {
     const range = `from=${encodeURIComponent(this.reportFrom)}&to=${encodeURIComponent(this.reportTo)}`;
+    const monthly = this.reportPeriod === 'thisMonth' || this.reportPeriod === 'lastMonth' || (this.reportPeriod === 'custom' && (Date.parse(this.reportTo) - Date.parse(this.reportFrom)) > 62 * 86400000);
+    this.monthlyChart.set(monthly);
+    const chartTo = this.reportTo;
+    const selectedMonth = new Date(`${this.reportTo.slice(0, 7)}-01T00:00:00Z`);
+    selectedMonth.setUTCMonth(selectedMonth.getUTCMonth() - 11);
+    const chartFrom = monthly && this.reportPeriod !== 'custom' ? selectedMonth.toISOString().slice(0, 10) : this.reportFrom;
+    const chartRange = `from=${encodeURIComponent(chartFrom)}&to=${encodeURIComponent(chartTo)}`;
     const [summary, methods, topProducts, daily] = await Promise.allSettled([
       this.api.get<ReportSummary>(`/reports/summary?${range}`),
       this.api.get<PaymentMethodReport[]>(`/reports/payment-methods?${range}`),
       this.api.get<TopProductReport[]>(`/reports/top-products?${range}`),
-      this.api.get<DailyReportPoint[]>(`/reports/daily?${range}`)
+      this.api.get<DailyReportPoint[]>(`/reports/daily?${chartRange}`)
     ]);
     this.report.set(summary.status === 'fulfilled' ? summary.value : null);
     this.paymentMethodReport.set(methods.status === 'fulfilled' ? methods.value : []);

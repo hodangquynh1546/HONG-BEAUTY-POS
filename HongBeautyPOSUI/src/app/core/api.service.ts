@@ -3,11 +3,12 @@ import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http
 import { firstValueFrom } from 'rxjs';
 import { Capacitor } from '@capacitor/core';
 
-export interface CurrentUser { id: string; email: string; fullName: string; role: 'Owner' | 'Employee'; permissions: string[]; }
+export interface CurrentUser { id: string; email: string; fullName: string; role: 'Owner' | 'Employee'; permissions: string[]; avatarData: string | null; }
 export interface AttributeOption { id: string; name: string; value: string; }
 export interface Product { id: string; sku: string; barcode: string | null; name: string; unit: string; reorderLevel: number; salePrice: number; costPrice: number; quantity: number; active: boolean; categoryId: string | null; attributes?: AttributeOption[]; imageData?: string | null; }
 export interface Category { id: string; name: string; parentId: string | null; active: boolean; }
-export interface Customer { id: string; fullName: string; phone: string | null; email: string | null; active: boolean; }
+export interface Customer { id: string; fullName: string; phone: string | null; phone2: string | null; gender: string | null; address: string | null; contact: string | null; notes: string | null; groupId: string | null; avatarData: string | null; email: string | null; active: boolean; }
+export interface CustomerGroup { id: string; name: string; active: boolean; }
 export interface Supplier { id: string; code: string; name: string; phone: string | null; email: string | null; active: boolean; }
 export interface Employee { id: string; email: string; fullName: string; active: boolean; permissions: string[]; }
 export interface AuditEvent { id: string; actorId: string; actorName: string; action: string; subjectId: string; subjectName: string; createdAt: string; }

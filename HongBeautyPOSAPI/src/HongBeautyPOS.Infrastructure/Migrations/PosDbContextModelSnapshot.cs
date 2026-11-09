@@ -169,6 +169,17 @@ namespace HongBeautyPOS.Infrastructure.Migrations
                     b.Property<bool>("Active")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("AvatarData")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Contact")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("Email")
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
@@ -178,15 +189,54 @@ namespace HongBeautyPOS.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("Gender")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<string>("Phone")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Phone2")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GroupId");
+
                     b.HasIndex("Phone");
 
                     b.ToTable("customers", (string)null);
+                });
+
+            modelBuilder.Entity("HongBeautyPOS.Domain.CustomerGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Active")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("customer_groups", (string)null);
                 });
 
             modelBuilder.Entity("HongBeautyPOS.Domain.EmployeePermission", b =>
@@ -813,6 +863,9 @@ namespace HongBeautyPOS.Infrastructure.Migrations
                     b.Property<bool>("Active")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("AvatarData")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -870,6 +923,14 @@ namespace HongBeautyPOS.Infrastructure.Migrations
                     b.HasOne("HongBeautyPOS.Domain.Category", null)
                         .WithMany()
                         .HasForeignKey("ParentId");
+                });
+
+            modelBuilder.Entity("HongBeautyPOS.Domain.Customer", b =>
+                {
+                    b.HasOne("HongBeautyPOS.Domain.CustomerGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("HongBeautyPOS.Domain.EmployeePermission", b =>

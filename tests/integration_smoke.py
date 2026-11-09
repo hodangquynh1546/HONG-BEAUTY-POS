@@ -169,9 +169,15 @@ try:
     assert inactive['active'] is False
     _, active = call('PATCH',f'/api/v1/products/{pid}/status',{'active':True})
     assert active['active'] is True
-    _, customer = call('POST','/api/v1/customers',{'fullName':'Test customer','phone':'0123456789'})
-    _, customer_updated = call('PUT',f"/api/v1/customers/{customer['id']}",{'fullName':'Updated customer','phone':'0987654321'})
+    _, group = call('POST','/api/v1/customer-groups',{'name':'Khách thân thiết'})
+    _, groups = call('GET','/api/v1/customer-groups')
+    assert any(item['id'] == group['id'] for item in groups)
+    _, customer = call('POST','/api/v1/customers',{'fullName':'Test customer','phone':'0123456789','phone2':'0123456788','gender':'Female','address':'Hà Nội','contact':'Zalo','notes':'Khách quen','groupId':group['id'],'avatarData':image_data})
+    assert customer['phone2'] == '0123456788' and customer['avatarData'] == image_data
+    _, customer_updated = call('PUT',f"/api/v1/customers/{customer['id']}",{'fullName':'Updated customer','phone':'0987654321','groupId':group['id'],'avatarData':image_data})
     assert customer_updated['fullName'] == 'Updated customer'
+    _, customer_list = call('GET','/api/v1/customers/search?q=0987654321')
+    assert customer_list['items'][0]['groupId'] == group['id'] and customer_list['items'][0]['avatarData'] == image_data
     _, customer_off = call('PATCH',f"/api/v1/customers/{customer['id']}/status",{'active':False})
     assert customer_off['active'] is False
     _, customer_on = call('PATCH',f"/api/v1/customers/{customer['id']}/status",{'active':True})
@@ -251,10 +257,10 @@ try:
     assert len(daily) == 1 and daily[0]['date'] == report_after_cash['from'], daily
     assert daily[0]['grossSales'] == 200 and daily[0]['returnedSales'] == 100 and daily[0]['netRevenue'] == 100
     assert daily[0]['cashIn'] == 225 and daily[0]['cashOut'] == 130 and daily[0]['netCashFlow'] == 95, daily
-    _, profile = call('PUT','/api/v1/me/profile',{'fullName':'Updated Owner'})
+    _, profile = call('PUT','/api/v1/me/profile',{'fullName':'Updated Owner','avatarData':image_data})
     assert profile['fullName'] == 'Updated Owner'
     _, current_user = call('GET','/api/v1/me')
-    assert current_user['fullName'] == 'Updated Owner'
+    assert current_user['fullName'] == 'Updated Owner' and current_user['avatarData'] == image_data
     changed_password = 'D8!' + secrets.token_urlsafe(20)
     call('PUT','/api/v1/me/password',{'currentPassword':env['OWNER_PASSWORD'],'newPassword':changed_password})
     try:

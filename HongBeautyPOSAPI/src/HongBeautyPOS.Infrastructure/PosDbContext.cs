@@ -33,6 +33,7 @@ public sealed class PosDbContext : DbContext
 	public DbSet<PurchaseItem> PurchaseItems => Set<PurchaseItem>();
 
 	public DbSet<Customer> Customers => Set<Customer>();
+	public DbSet<CustomerGroup> CustomerGroups => Set<CustomerGroup>();
 
 	public DbSet<SalesOrder> SalesOrders => Set<SalesOrder>();
 
@@ -64,6 +65,7 @@ public sealed class PosDbContext : DbContext
 			e.Property((User x) => x.Role).HasConversion<string>().HasMaxLength(16);
 			e.Property((User x) => x.Email).HasMaxLength(320);
 			e.Property((User x) => x.FullName).HasMaxLength(200);
+			e.Property((User x) => x.AvatarData).HasColumnType("text");
 			e.HasMany((User x) => x.Permissions).WithOne().HasForeignKey((EmployeePermission x) => x.UserId);
 		});
 		model.Entity((EntityTypeBuilder<EmployeePermission> e) =>
@@ -230,8 +232,22 @@ public sealed class PosDbContext : DbContext
 			e.HasKey((Customer x) => x.Id);
 			e.Property((Customer x) => x.FullName).HasMaxLength(200);
 			e.Property((Customer x) => x.Phone).HasMaxLength(40);
+			e.Property((Customer x) => x.Phone2).HasMaxLength(40);
+			e.Property((Customer x) => x.Gender).HasMaxLength(20);
+			e.Property((Customer x) => x.Address).HasMaxLength(500);
+			e.Property((Customer x) => x.Contact).HasMaxLength(200);
+			e.Property((Customer x) => x.Notes).HasMaxLength(2000);
+			e.Property((Customer x) => x.AvatarData).HasColumnType("text");
+			e.HasOne<CustomerGroup>().WithMany().HasForeignKey((Customer x) => x.GroupId).OnDelete(DeleteBehavior.Restrict);
 			e.Property((Customer x) => x.Email).HasMaxLength(320);
 			e.HasIndex((Customer x) => x.Phone);
+		});
+		model.Entity((EntityTypeBuilder<CustomerGroup> e) =>
+		{
+			e.ToTable("customer_groups");
+			e.HasKey(x => x.Id);
+			e.Property(x => x.Name).HasMaxLength(160);
+			e.HasIndex(x => x.Name).IsUnique();
 		});
 		model.Entity((EntityTypeBuilder<SalesOrder> e) =>
 		{

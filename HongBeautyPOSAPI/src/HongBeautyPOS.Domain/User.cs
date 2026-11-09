@@ -12,6 +12,7 @@ public sealed class User
 	public required string PasswordHash { get; set; }
 
 	public required string FullName { get; set; }
+	public string? AvatarData { get; set; }
 
 	public UserRole Role { get; set; }
 

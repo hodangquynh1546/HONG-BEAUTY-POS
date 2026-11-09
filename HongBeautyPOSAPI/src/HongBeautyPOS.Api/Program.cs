@@ -208,7 +208,7 @@ protectedApi.MapGet("/me", async (ClaimsPrincipal principal, PosDbContext db) =>
     if (user is null) return Results.Unauthorized();
     var permissions = user.Role == UserRole.Owner ? Array.Empty<string>() :
         await db.EmployeePermissions.Where(p => p.UserId == id).Select(p => p.Permission).ToArrayAsync();
-    return Results.Ok(new { user.Id, user.Email, user.FullName, Role = user.Role.ToString(), Permissions = permissions });
+    return Results.Ok(new { user.Id, user.Email, user.FullName, user.AvatarData, Role = user.Role.ToString(), Permissions = permissions });
 });
 protectedApi.MapPut("/me/profile", async (ClaimsPrincipal principal, PosDbContext db, UpdateProfileRequest request, CancellationToken ct) =>
 {
@@ -218,9 +218,11 @@ protectedApi.MapPut("/me/profile", async (ClaimsPrincipal principal, PosDbContex
     var user = await db.Users.SingleOrDefaultAsync(u => u.Id == id && u.Active, ct);
     if (user is null) return Results.Unauthorized();
     user.FullName = name;
+    try { user.AvatarData = ProductImageRules.Normalize(request.AvatarData); }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
     db.AuditEvents.Add(new AuditEvent { ActorId = id, Action = "PROFILE_UPDATED", SubjectId = id });
     await db.SaveChangesAsync(ct);
-    return Results.Ok(new { user.Id, user.Email, user.FullName, Role = user.Role.ToString() });
+    return Results.Ok(new { user.Id, user.Email, user.FullName, user.AvatarData, Role = user.Role.ToString() });
 });
 protectedApi.MapPut("/me/password", async (ClaimsPrincipal principal, PosDbContext db, ChangePasswordRequest request, CancellationToken ct) =>
 {
@@ -400,11 +402,28 @@ protectedApi.MapPatch("/categories/{id:guid}/status", async (Guid id, ClaimsPrin
     return Results.Ok(new { category.Id, category.Active });
 });
 
+protectedApi.MapGet("/customer-groups", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "customers.read", ct)) return Results.Forbid();
+    return Results.Ok(await db.CustomerGroups.AsNoTracking().OrderBy(g => g.Name).ToListAsync(ct));
+});
+protectedApi.MapPost("/customer-groups", async (ClaimsPrincipal principal, PosDbContext db, CreateCustomerGroupRequest request, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "customers.write", ct)) return Results.Forbid();
+    var name = request.Name?.Trim();
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 160) return Results.BadRequest(new { error = "Tên nhóm khách hàng không hợp lệ" });
+    if (await db.CustomerGroups.AnyAsync(g => g.Name.ToLower() == name.ToLower(), ct)) return Results.Conflict(new { error = "Nhóm khách hàng đã tồn tại" });
+    var group = new CustomerGroup { Name = name };
+    db.CustomerGroups.Add(group);
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "CUSTOMER_GROUP_CREATED", SubjectId = group.Id });
+    await db.SaveChangesAsync(ct);
+    return Results.Created($"/api/v1/customer-groups/{group.Id}", group);
+});
 protectedApi.MapGet("/customers", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
 {
     if (!await HasPermission(principal, db, "customers.read", ct)) return Results.Forbid();
     return Results.Ok(await db.Customers.AsNoTracking().OrderBy(c => c.FullName)
-        .Select(c => new { c.Id, c.FullName, c.Phone, c.Email, c.Active }).Take(200).ToListAsync(ct));
+        .Select(c => new { c.Id, c.FullName, c.Phone, c.Phone2, c.Gender, c.Address, c.Contact, c.Notes, c.AvatarData, c.GroupId, c.Email, c.Active }).Take(200).ToListAsync(ct));
 });
 protectedApi.MapGet("/customers/search", async (ClaimsPrincipal principal, PosDbContext db, string? q, int? skip, int? take, bool? activeOnly, CancellationToken ct) =>
 {
@@ -421,12 +440,13 @@ protectedApi.MapGet("/customers/search", async (ClaimsPrincipal principal, PosDb
         var pattern = "%" + term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
         query = query.Where(c => EF.Functions.ILike(c.FullName, pattern, "\\") ||
             (c.Phone != null && EF.Functions.ILike(c.Phone, pattern, "\\")) ||
-            (c.Email != null && EF.Functions.ILike(c.Email, pattern, "\\")));
+            (c.Email != null && EF.Functions.ILike(c.Email, pattern, "\\")) ||
+            (c.Phone2 != null && EF.Functions.ILike(c.Phone2, pattern, "\\")));
     }
     var total = await query.CountAsync(ct);
     var items = await query.OrderBy(c => c.FullName).ThenBy(c => c.Id)
         .Skip(offset).Take(pageSize)
-        .Select(c => new { c.Id, c.FullName, c.Phone, c.Email, c.Active }).ToListAsync(ct);
+        .Select(c => new { c.Id, c.FullName, c.Phone, c.Phone2, c.Gender, c.Address, c.Contact, c.Notes, c.AvatarData, c.GroupId, c.Email, c.Active }).ToListAsync(ct);
     return Results.Ok(new { items, total });
 });
 protectedApi.MapPost("/customers", async (ClaimsPrincipal principal, PosDbContext db, CreateCustomerRequest request, CancellationToken ct) =>
@@ -435,12 +455,16 @@ protectedApi.MapPost("/customers", async (ClaimsPrincipal principal, PosDbContex
     var name = request.FullName?.Trim();
     var phone = request.Phone?.Trim();
     var email = request.Email?.Trim().ToLowerInvariant();
-    if (string.IsNullOrWhiteSpace(name) || name.Length > 200 || phone?.Length > 40 || email?.Length > 320)
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 200 || phone?.Length > 40 || email?.Length > 320 || !ValidCustomerDetails(request))
         return Results.BadRequest(new { error = "Thông tin khách hàng không hợp lệ" });
-    var customer = new Customer { FullName = name, Phone = phone, Email = email };
+    if (request.GroupId.HasValue && !await db.CustomerGroups.AnyAsync(g => g.Id == request.GroupId && g.Active, ct)) return Results.BadRequest(new { error = "Nhóm khách hàng không hợp lệ" });
+    string? avatar;
+    try { avatar = ProductImageRules.Normalize(request.AvatarData); }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+    var customer = new Customer { FullName = name, Phone = phone, Email = email, Phone2 = request.Phone2?.Trim(), Gender = request.Gender, Address = request.Address?.Trim(), Contact = request.Contact?.Trim(), Notes = request.Notes?.Trim(), GroupId = request.GroupId, AvatarData = avatar };
     db.Customers.Add(customer);
     await db.SaveChangesAsync(ct);
-    return Results.Created($"/api/v1/customers/{customer.Id}", new { customer.Id, customer.FullName, customer.Phone, customer.Email, customer.Active });
+    return Results.Created($"/api/v1/customers/{customer.Id}", customer);
 });
 protectedApi.MapPut("/customers/{id:guid}", async (Guid id, ClaimsPrincipal principal, PosDbContext db, CreateCustomerRequest request, CancellationToken ct) =>
 {
@@ -448,16 +472,27 @@ protectedApi.MapPut("/customers/{id:guid}", async (Guid id, ClaimsPrincipal prin
     var name = request.FullName?.Trim();
     var phone = request.Phone?.Trim();
     var email = request.Email?.Trim().ToLowerInvariant();
-    if (string.IsNullOrWhiteSpace(name) || name.Length > 200 || phone?.Length > 40 || email?.Length > 320)
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 200 || phone?.Length > 40 || email?.Length > 320 || !ValidCustomerDetails(request))
         return Results.BadRequest(new { error = "Thông tin khách hàng không hợp lệ" });
+    if (request.GroupId.HasValue && !await db.CustomerGroups.AnyAsync(g => g.Id == request.GroupId && g.Active, ct)) return Results.BadRequest(new { error = "Nhóm khách hàng không hợp lệ" });
+    string? avatar;
+    try { avatar = ProductImageRules.Normalize(request.AvatarData); }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
     var customer = await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct);
     if (customer is null) return Results.NotFound();
     customer.FullName = name;
     customer.Phone = phone;
     customer.Email = email;
+    customer.Phone2 = request.Phone2?.Trim();
+    customer.Gender = request.Gender;
+    customer.Address = request.Address?.Trim();
+    customer.Contact = request.Contact?.Trim();
+    customer.Notes = request.Notes?.Trim();
+    customer.GroupId = request.GroupId;
+    customer.AvatarData = avatar;
     db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "CUSTOMER_UPDATED", SubjectId = id });
     await db.SaveChangesAsync(ct);
-    return Results.Ok(new { customer.Id, customer.FullName, customer.Phone, customer.Email, customer.Active });
+    return Results.Ok(customer);
 });
 protectedApi.MapPatch("/customers/{id:guid}/status", async (Guid id, ClaimsPrincipal principal, PosDbContext db, ActiveStatusRequest request, CancellationToken ct) =>
 {
@@ -1006,6 +1041,7 @@ protectedApi.MapGet("/audit-events", async (ClaimsPrincipal principal, PosDbCont
     var products = await db.Products.AsNoTracking().Where(p => ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Name, ct);
     var categories = await db.Categories.AsNoTracking().Where(c => ids.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
     var customers = await db.Customers.AsNoTracking().Where(c => ids.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.FullName, ct);
+    var customerGroups = await db.CustomerGroups.AsNoTracking().Where(g => ids.Contains(g.Id)).ToDictionaryAsync(g => g.Id, g => g.Name, ct);
     var suppliers = await db.Suppliers.AsNoTracking().Where(s => ids.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Name, ct);
     var orders = await db.SalesOrders.AsNoTracking().Where(o => ids.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.OrderNo, ct);
     var returns = await (from r in db.SalesReturns.AsNoTracking() join o in db.SalesOrders.AsNoTracking() on r.OrderId equals o.Id
@@ -1016,6 +1052,7 @@ protectedApi.MapGet("/audit-events", async (ClaimsPrincipal principal, PosDbCont
         SubjectName = e.Action.StartsWith("EMPLOYEE_", StringComparison.Ordinal) ? users.GetValueOrDefault(e.SubjectId, "Nhân viên") :
             e.Action.StartsWith("PRODUCT_", StringComparison.Ordinal) ? products.GetValueOrDefault(e.SubjectId, "Sản phẩm") :
             e.Action.StartsWith("CATEGORY_", StringComparison.Ordinal) ? categories.GetValueOrDefault(e.SubjectId, "Danh mục") :
+            e.Action.StartsWith("CUSTOMER_GROUP_", StringComparison.Ordinal) ? customerGroups.GetValueOrDefault(e.SubjectId, "Nhóm khách hàng") :
             e.Action.StartsWith("CUSTOMER_", StringComparison.Ordinal) ? customers.GetValueOrDefault(e.SubjectId, "Khách hàng") :
             e.Action.StartsWith("SUPPLIER_", StringComparison.Ordinal) ? suppliers.GetValueOrDefault(e.SubjectId, "Nhà cung cấp") :
             e.Action.StartsWith("SALE_RETURN_", StringComparison.Ordinal) ? "Đơn " + returns.GetValueOrDefault(e.SubjectId, "đã trả hàng") :
@@ -1037,6 +1074,13 @@ static async Task<bool> HasPermission(ClaimsPrincipal principal, PosDbContext db
     return user.Role == UserRole.Owner || await db.EmployeePermissions.AnyAsync(p => p.UserId == id && p.Permission == permission, ct);
 }
 
+static bool ValidCustomerDetails(CreateCustomerRequest request) =>
+    (request.Phone2 is null || request.Phone2.Length <= 40) &&
+    (request.Address is null || request.Address.Length <= 500) &&
+    (request.Contact is null || request.Contact.Length <= 200) &&
+    (request.Notes is null || request.Notes.Length <= 2000) &&
+    (request.Gender is null or "Male" or "Female" or "Other");
+
 static async Task<bool> IsOwner(ClaimsPrincipal principal, PosDbContext db, CancellationToken ct)
 {
     if (!Guid.TryParse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub), out var id)) return false;
@@ -1044,7 +1088,7 @@ static async Task<bool> IsOwner(ClaimsPrincipal principal, PosDbContext db, Canc
 }
 
 sealed record LoginRequest(string Email, string Password);
-sealed record UpdateProfileRequest(string FullName);
+sealed record UpdateProfileRequest(string FullName, string? AvatarData);
 sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 sealed record DailyReportPoint(DateOnly Date, decimal GrossSales, decimal ReturnedSales, decimal NetRevenue,
     decimal CashIn, decimal CashOut, decimal NetCashFlow);
@@ -1055,7 +1099,9 @@ sealed record ResetEmployeePasswordRequest(string Password);
 sealed record ActiveStatusRequest(bool Active);
 sealed record CreateCategoryRequest(string Name, Guid? ParentId);
 sealed record CreateAttributeRequest(string Name, string[]? Values);
-sealed record CreateCustomerRequest(string FullName, string? Phone, string? Email);
+sealed record CreateCustomerGroupRequest(string Name);
+sealed record CreateCustomerRequest(string FullName, string? Phone, string? Email, string? Phone2 = null, string? Gender = null,
+    string? Address = null, string? Contact = null, string? Notes = null, Guid? GroupId = null, string? AvatarData = null);
 sealed record CreateSupplierRequest(string Code, string Name, string? Phone, string? Email);
 sealed record CountStocktakeItemRequest(decimal ActualQuantity);
 sealed record CreateCashEntryRequest(Guid IdempotencyKey, CashEntryKind Kind, PaymentMethod Method, decimal Amount, string Description);

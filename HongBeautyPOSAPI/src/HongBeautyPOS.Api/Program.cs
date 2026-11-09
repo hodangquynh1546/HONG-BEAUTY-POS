@@ -729,6 +729,39 @@ protectedApi.MapGet("/reports/payment-methods", async (ClaimsPrincipal principal
     }));
 });
 
+protectedApi.MapGet("/reports/top-products", async (ClaimsPrincipal principal, PosDbContext db, DateOnly? from, DateOnly? to, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "reports.read", ct)) return Results.Forbid();
+    var zone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+    var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).DateTime);
+    var startDate = from ?? today;
+    var endDate = to ?? today;
+    if (endDate < startDate || endDate.DayNumber - startDate.DayNumber > 366)
+        return Results.BadRequest(new { error = "Khoảng báo cáo phải từ 1 đến 367 ngày." });
+    var start = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(startDate.ToDateTime(TimeOnly.MinValue), zone));
+    var end = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(endDate.AddDays(1).ToDateTime(TimeOnly.MinValue), zone));
+    var sold = await (from item in db.SalesOrderItems.AsNoTracking()
+        join order in db.SalesOrders.AsNoTracking() on item.OrderId equals order.Id
+        where order.CreatedAt >= start && order.CreatedAt < end && order.Status != SaleStatus.Cancelled
+        group item by item.ProductId into groupItems
+        select new { ProductId = groupItems.Key, Quantity = groupItems.Sum(i => i.Quantity) }).ToListAsync(ct);
+    var returned = await (from item in db.SalesReturnItems.AsNoTracking()
+        join saleItem in db.SalesOrderItems.AsNoTracking() on item.OrderItemId equals saleItem.Id
+        join saleReturn in db.SalesReturns.AsNoTracking() on item.ReturnId equals saleReturn.Id
+        where saleReturn.CreatedAt >= start && saleReturn.CreatedAt < end
+        group item by saleItem.ProductId into groupItems
+        select new { ProductId = groupItems.Key, Quantity = groupItems.Sum(i => i.Quantity) }).ToListAsync(ct);
+    var ids = sold.Select(x => x.ProductId).Concat(returned.Select(x => x.ProductId)).Distinct().ToArray();
+    var names = await db.Products.AsNoTracking().Where(p => ids.Contains(p.Id))
+        .ToDictionaryAsync(p => p.Id, p => p.Name, ct);
+    return Results.Ok(ids.Select(id => new {
+        productId = id, productName = names.GetValueOrDefault(id, "Sản phẩm không còn sử dụng"),
+        soldQuantity = sold.FirstOrDefault(x => x.ProductId == id)?.Quantity ?? 0m,
+        returnedQuantity = returned.FirstOrDefault(x => x.ProductId == id)?.Quantity ?? 0m,
+        netQuantity = (sold.FirstOrDefault(x => x.ProductId == id)?.Quantity ?? 0m) - (returned.FirstOrDefault(x => x.ProductId == id)?.Quantity ?? 0m)
+    }).OrderByDescending(x => x.netQuantity).ThenBy(x => x.productName).Take(10));
+});
+
 protectedApi.MapGet("/employees", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
 {
     if (!await IsOwner(principal, db, ct)) return Results.Forbid();

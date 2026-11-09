@@ -25,6 +25,7 @@
 - Màn Thu chi dùng API thật: ghi thu khác, chi vận hành, trả nhà cung cấp, chi khác; xem lịch sử kèm tên người ghi; giữ khóa idempotency khi kết nối gián đoạn và không cộng tiền bán hàng lần hai. PostgreSQL integration smoke test xác nhận gửi lại cùng mã không tạo phiếu trùng, doanh thu bán hàng giữ nguyên và dòng tiền cập nhật đúng.
 - Màn Kho hiển thị tổng số lượng tồn, hàng sắp hết/hết hàng và lịch sử nhập, bán, trả, kiểm kho từ database. Lịch sử có tên sản phẩm, người thao tác, tồn trước/sau, lọc sản phẩm và phân trang; API chỉ trả dữ liệu khi có quyền xem kho.
 - Báo cáo tách tiền đã thu, tiền đã hoàn và thực nhận theo tiền mặt, chuyển khoản, QR từ giao dịch thật; API giới hạn khoảng ngày và kiểm tra quyền xem báo cáo.
+- Báo cáo 10 sản phẩm bán chạy hiển thị tên, số đã bán, đã trả và bán ròng theo khoảng ngày từ đơn hàng và phiếu trả thật.
 - Sửa khởi động Render khi chưa có biến `OWNER_*`: dịch vụ ghi cảnh báo và vẫn chạy; khi nhập đủ thông tin hợp lệ rồi triển khai lại thì tạo Chủ sở hữu. PostgreSQL smoke test trên database mới xác nhận `/health` trả 200 trước khi thiết lập, đăng nhập trả 401 trước và 200 sau khi nhập thông tin.
 
 ## Chưa xác minh

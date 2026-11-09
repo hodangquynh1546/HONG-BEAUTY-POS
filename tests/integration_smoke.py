@@ -60,6 +60,11 @@ try:
     except RuntimeError as error:
         assert 'HTTP 403' in str(error), error
     try:
+        call('GET','/api/v1/reports/top-products')
+        raise AssertionError('Employee without reports.read viewed top products')
+    except RuntimeError as error:
+        assert 'HTTP 403' in str(error), error
+    try:
         call('POST','/api/v1/products',{'sku':'DENIED','name':'Denied','salePrice':1,'costPrice':1})
         raise AssertionError('Employee unexpectedly created a product')
     except RuntimeError as error:
@@ -204,6 +209,9 @@ try:
     cash = next(x for x in payment_methods if x['method'] == 'Cash')
     assert cash['received'] == 200 and cash['refunded'] == 100 and cash['net'] == 100, payment_methods
     assert len(payment_methods) == 3 and sum(x['net'] for x in payment_methods) == 100
+    _, top_products = call('GET','/api/v1/reports/top-products')
+    assert len(top_products) == 1 and top_products[0]['productName'] == 'Updated lipstick', top_products
+    assert top_products[0]['soldQuantity'] == 2 and top_products[0]['returnedQuantity'] == 1 and top_products[0]['netQuantity'] == 1
     cash_key = str(__import__('uuid').uuid4())
     cash_payload = {'idempotencyKey':cash_key,'kind':'OtherIncome','method':'BankTransfer','amount':25,'description':'Thu khác kiểm thử'}
     _, cash_entry = call('POST','/api/v1/cash-entries',cash_payload)

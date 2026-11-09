@@ -295,10 +295,27 @@ body,button,input,select,textarea{font-family:'Times New Roman',Times,serif}h1,h
 .report-date-range { display: flex; align-items: end; gap: 10px; }
 .report-date-range label { flex: 1; min-width: 0; margin: 0; }
 .report-date-range .primary { flex: 0 0 auto; width: auto; }
+@media (max-width: 900px) {
+  .columns { align-items: stretch; min-width: 0; width: 100%; }
+  .columns > .grow { width: 100%; min-width: 0; }
+  .shell .overlay-panel.account-overlay .columns .form-panel { width: 100%; }
+}
 @media (max-width: 650px) {
   .content { width: 100%; overflow-x: clip; }
   .content header > div { flex: 1; min-width: 0; }
   .content header > button { flex: none; }
+  .content > .columns, .content > .panel, .content > .stat-grid { width: 100%; max-width: 100%; min-width: 0; }
+  .columns > .panel, .list-with-form > .panel { max-width: 100%; min-width: 0; }
+  .panel-heading { min-width: 0; }
+  .panel-heading h2 { min-width: 0; overflow-wrap: anywhere; }
+  .panel-heading > button { flex: none; }
+  .search-row { width: 100%; min-width: 0; }
+  .search-row > input, .search-row > select { min-width: 0; flex: 1; }
+  .mobile-product-list, .mobile-customer-list, .mobile-record-list { width: 100%; min-width: 0; }
+  .overlay-panel.form-panel form, .overlay-panel.form-panel form > *, .overlay-panel.form-panel .inline-heading { min-width: 0; max-width: 100%; }
+  .overlay-panel.form-panel input, .overlay-panel.form-panel select, .overlay-panel.form-panel textarea { min-width: 0; max-width: 100%; }
+  .overlay-panel.form-panel .cash-entry-form { display: block; }
+  .cash-entry-form > label { width: 100%; }
   .shell .content .dashboard-date-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; align-items: end; }
   .shell .content .dashboard-date-range label { min-width: 0; width: 100%; }
   .shell .content .order-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }

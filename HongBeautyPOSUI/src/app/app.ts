@@ -1,10 +1,11 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
 
 type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit' | 'account';
+type Overlay = 'account' | 'product' | 'category' | 'customer' | 'supplier' | 'employee' | 'permissions' | 'stock' | 'purchase' | 'cash' | 'return' | null;
 
 @Component({
   selector: 'app-root',
@@ -15,6 +16,9 @@ type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' |
 export class App implements OnInit {
   readonly page = signal<Page>('overview');
   readonly sidebarCollapsed = signal(localStorage.getItem('mieu_sidebar_collapsed') === 'true');
+  readonly overlay = signal<Overlay>(null);
+  readonly confirmation = signal<{ title: string; message: string; action: string } | null>(null);
+  private resolveConfirmation: ((accepted: boolean) => void) | null = null;
   readonly forgotPasswordInfo = signal(false);
   profileName = '';
   currentPassword = '';
@@ -125,6 +129,47 @@ export class App implements OnInit {
     this.sidebarCollapsed.update(value => !value);
     localStorage.setItem('mieu_sidebar_collapsed', String(this.sidebarCollapsed()));
   }
+
+  openOverlay(kind: Exclude<Overlay, null>): void {
+    this.error.set('');
+    this.overlay.set(kind);
+  }
+
+  closeOverlay(): void {
+    if (this.loading()) return;
+    if (this.overlay() === 'product') this.cancelProductEdit();
+    if (this.overlay() === 'category') this.cancelCategoryEdit();
+    if (this.overlay() === 'customer') this.cancelCustomerEdit();
+    if (this.overlay() === 'supplier') this.cancelSupplierEdit();
+    this.overlay.set(null);
+    this.selectedEmployeeId.set('');
+    this.returnOrderId = '';
+    this.currentPassword = this.newPassword = this.confirmPassword = '';
+  }
+
+  private askConfirmation(message: string, action = 'Xác nhận'): Promise<boolean> {
+    return new Promise(resolve => {
+      this.resolveConfirmation = resolve;
+      this.confirmation.set({ title: 'Xác nhận thao tác', message, action });
+    });
+  }
+
+  answerConfirmation(accepted: boolean): void {
+    this.confirmation.set(null);
+    this.resolveConfirmation?.(accepted);
+    this.resolveConfirmation = null;
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.confirmation()) this.answerConfirmation(false);
+    else if (this.overlay()) this.closeOverlay();
+  }
+
+  createProduct(): void { this.cancelProductEdit(); this.openOverlay('product'); }
+  createCategory(): void { this.cancelCategoryEdit(); this.openOverlay('category'); }
+  createCustomer(): void { this.cancelCustomerEdit(); this.openOverlay('customer'); }
+  createSupplier(): void { this.cancelSupplierEdit(); this.openOverlay('supplier'); }
 
   async saveProfile(): Promise<void> {
     this.loading.set(true); this.error.set(''); this.notice.set('');
@@ -285,6 +330,7 @@ export class App implements OnInit {
   editProduct(product: Product): void {
     this.editingProductId = product.id;
     this.newProduct = { sku: product.sku, barcode: product.barcode ?? '', name: product.name, unit: product.unit, reorderLevel: product.reorderLevel, salePrice: product.salePrice, costPrice: product.costPrice, categoryId: product.categoryId ?? '' };
+    this.openOverlay('product');
   }
 
   cancelProductEdit(): void {
@@ -300,13 +346,14 @@ export class App implements OnInit {
       else await this.api.post('/products', payload);
       this.notice.set(this.editingProductId ? 'Đã cập nhật sản phẩm' : 'Đã tạo sản phẩm');
       this.cancelProductEdit();
+      this.overlay.set(null);
       await this.refresh();
     } catch { this.error.set('Không lưu được sản phẩm. Kiểm tra SKU, danh mục và giá trị nhập.'); }
     finally { this.loading.set(false); }
   }
 
   async setProductActive(product: Product): Promise<void> {
-    if (!confirm(`${product.active ? 'Ngừng sử dụng' : 'Kích hoạt lại'} sản phẩm ${product.name}?`)) return;
+    if (!await this.askConfirmation(`${product.active ? 'Ngừng sử dụng' : 'Kích hoạt lại'} sản phẩm ${product.name}?`)) return;
     this.loading.set(true); this.error.set('');
     try {
       await this.api.patch(`/products/${product.id}/status`, { active: !product.active });
@@ -319,6 +366,7 @@ export class App implements OnInit {
   editCategory(category: Category): void {
     this.editingCategoryId = category.id;
     this.newCategory = { name: category.name, parentId: category.parentId ?? '' };
+    this.openOverlay('category');
   }
 
   cancelCategoryEdit(): void {
@@ -334,13 +382,14 @@ export class App implements OnInit {
       else await this.api.post('/categories', payload);
       this.notice.set(this.editingCategoryId ? 'Đã cập nhật danh mục' : 'Đã tạo danh mục');
       this.cancelCategoryEdit();
+      this.overlay.set(null);
       await this.refresh();
     } catch { this.error.set('Không lưu được danh mục. Kiểm tra tên, danh mục cha và quan hệ cấp cha.'); }
     finally { this.loading.set(false); }
   }
 
   async setCategoryActive(category: Category): Promise<void> {
-    if (!confirm(`${category.active ? 'Ngừng sử dụng' : 'Kích hoạt lại'} danh mục ${category.name}?`)) return;
+    if (!await this.askConfirmation(`${category.active ? 'Ngừng sử dụng' : 'Kích hoạt lại'} danh mục ${category.name}?`)) return;
     this.loading.set(true); this.error.set('');
     try {
       await this.api.patch(`/categories/${category.id}/status`, { active: !category.active });
@@ -353,6 +402,7 @@ export class App implements OnInit {
   editCustomer(customer: Customer): void {
     this.editingCustomerId = customer.id;
     this.newCustomer = { fullName: customer.fullName, phone: customer.phone ?? '', email: customer.email ?? '' };
+    this.openOverlay('customer');
   }
 
   cancelCustomerEdit(): void {
@@ -367,13 +417,14 @@ export class App implements OnInit {
       else await this.api.post('/customers', this.newCustomer);
       this.notice.set(this.editingCustomerId ? 'Đã cập nhật khách hàng' : 'Đã tạo khách hàng');
       this.cancelCustomerEdit();
+      this.overlay.set(null);
       await this.refresh();
     } catch { this.error.set('Không lưu được khách hàng. Kiểm tra thông tin nhập.'); }
     finally { this.loading.set(false); }
   }
 
   async setCustomerActive(customer: Customer): Promise<void> {
-    if (!confirm(`${customer.active ? 'Ngừng sử dụng' : 'Kích hoạt lại'} khách hàng ${customer.fullName}?`)) return;
+    if (!await this.askConfirmation(`${customer.active ? 'Ngừng sử dụng' : 'Kích hoạt lại'} khách hàng ${customer.fullName}?`)) return;
     this.loading.set(true); this.error.set('');
     try {
       await this.api.patch(`/customers/${customer.id}/status`, { active: !customer.active });
@@ -386,6 +437,7 @@ export class App implements OnInit {
   editSupplier(supplier: Supplier): void {
     this.editingSupplierId = supplier.id;
     this.newSupplier = { code: supplier.code, name: supplier.name, phone: supplier.phone ?? '', email: supplier.email ?? '' };
+    this.openOverlay('supplier');
   }
 
   cancelSupplierEdit(): void {
@@ -400,13 +452,14 @@ export class App implements OnInit {
       else await this.api.post('/suppliers', this.newSupplier);
       this.notice.set(this.editingSupplierId ? 'Đã cập nhật nhà cung cấp' : 'Đã tạo nhà cung cấp');
       this.cancelSupplierEdit();
+      this.overlay.set(null);
       await this.refresh();
     } catch { this.error.set('Không lưu được nhà cung cấp. Kiểm tra mã đã trùng hoặc thông tin nhập.'); }
     finally { this.loading.set(false); }
   }
 
   async setSupplierActive(supplier: Supplier): Promise<void> {
-    if (!confirm(`${supplier.active ? 'Ngừng sử dụng' : 'Kích hoạt lại'} nhà cung cấp ${supplier.name}?`)) return;
+    if (!await this.askConfirmation(`${supplier.active ? 'Ngừng sử dụng' : 'Kích hoạt lại'} nhà cung cấp ${supplier.name}?`)) return;
     this.loading.set(true); this.error.set('');
     try {
       await this.api.patch(`/suppliers/${supplier.id}/status`, { active: !supplier.active });
@@ -421,6 +474,7 @@ export class App implements OnInit {
     try {
       await this.api.post('/employees', { ...this.newEmployee, permissions: ['products.read'] });
       this.newEmployee = { email: '', fullName: '', password: '' };
+      this.overlay.set(null);
       this.notice.set('Đã tạo nhân viên');
       await this.refresh();
     } catch { this.error.set('Không tạo được nhân viên. Kiểm tra thông tin và email trùng.'); }
@@ -431,11 +485,12 @@ export class App implements OnInit {
     this.selectedEmployeeId.set(employee.id);
     this.resetEmployeePasswordInput = '';
     this.permissionSelection = Object.fromEntries(this.availablePermissions().map(permission => [permission, employee.permissions.includes(permission)]));
+    this.openOverlay('permissions');
   }
 
   async resetEmployeePassword(): Promise<void> {
     const employee = this.selectedEmployee();
-    if (!employee || !confirm(`Đặt lại mật khẩu cho ${employee.fullName}?`)) return;
+    if (!employee || !await this.askConfirmation(`Đặt lại mật khẩu cho ${employee.fullName}?`)) return;
     this.loading.set(true); this.error.set('');
     try {
       await this.api.put(`/employees/${employee.id}/password`, { password: this.resetEmployeePasswordInput });
@@ -475,7 +530,7 @@ export class App implements OnInit {
   }
 
   async setEmployeeActive(employee: Employee): Promise<void> {
-    if (!window.confirm(`${employee.active ? 'Khóa' : 'Mở khóa'} tài khoản ${employee.fullName}?`)) return;
+    if (!await this.askConfirmation(`${employee.active ? 'Khóa' : 'Mở khóa'} tài khoản ${employee.fullName}?`)) return;
     this.loading.set(true); this.error.set('');
     try {
       await this.api.patch(`/employees/${employee.id}/status`, { active: !employee.active });
@@ -486,10 +541,12 @@ export class App implements OnInit {
   }
 
   async adjustStock(): Promise<void> {
+    if (!await this.askConfirmation(`Điều chỉnh tồn kho ${this.adjustment.delta > 0 ? '+' : ''}${this.adjustment.delta} sản phẩm?`)) return;
     this.loading.set(true); this.error.set('');
     try {
       await this.api.post('/stock/adjustments', this.adjustment);
       this.adjustment = { productId: '', delta: 0, reason: '' };
+      this.overlay.set(null);
       this.notice.set('Đã ghi nhận thay đổi kho và lịch sử');
       await this.refresh();
     } catch { this.error.set('Không điều chỉnh được kho. Kiểm tra tồn và lý do.'); }
@@ -531,7 +588,7 @@ export class App implements OnInit {
 
   async completeStocktake(): Promise<void> {
     const session = this.currentStocktake();
-    if (!session || !window.confirm('Xác nhận chênh lệch và cập nhật tồn kho?')) return;
+    if (!session || !await this.askConfirmation('Xác nhận chênh lệch và cập nhật tồn kho?')) return;
     this.loading.set(true); this.error.set('');
     try {
       this.currentStocktake.set(await this.api.post<StocktakeSession>(`/stocktakes/${session.id}/complete`, {}));
@@ -549,6 +606,7 @@ export class App implements OnInit {
       await this.api.post('/purchases', { supplierId: this.selectedSupplierId || null, items: this.purchaseLines });
       this.purchaseLines = [{ productId: '', quantity: 1, unitCost: 0 }];
       this.selectedSupplierId = '';
+      this.overlay.set(null);
       this.notice.set('Đã tạo phiếu nhập nháp');
       await this.refresh();
     } catch { this.error.set('Không tạo được phiếu nhập. Kiểm tra sản phẩm, số lượng và giá vốn.'); }
@@ -556,7 +614,7 @@ export class App implements OnInit {
   }
 
   async completePurchase(id: string): Promise<void> {
-    if (!window.confirm('Hoàn tất phiếu nhập và tăng tồn kho?')) return;
+    if (!await this.askConfirmation('Hoàn tất phiếu nhập và tăng tồn kho?')) return;
     this.loading.set(true); this.error.set('');
     try {
       await this.api.post(`/purchases/${id}/complete`, {});
@@ -578,6 +636,7 @@ export class App implements OnInit {
 
   async checkout(): Promise<void> {
     if (!this.cartItems().length && !this.pendingOrderId) return;
+    if (!this.pendingOrderId && !await this.askConfirmation(`Tạo đơn ${this.cartTotal().toLocaleString('vi-VN')} đ và ghi nhận ${this.paymentAmount.toLocaleString('vi-VN')} đ thanh toán?`, 'Tạo đơn')) return;
     this.loading.set(true); this.error.set('');
     try {
       if (!this.pendingOrderId) {
@@ -624,6 +683,7 @@ export class App implements OnInit {
       this.returnRefundAmount = 0;
       this.returnQuantity = {};
       this.returnRestock = {};
+      this.openOverlay('return');
     } catch { this.error.set('Không tải được chi tiết đơn hàng.'); }
     finally { this.loading.set(false); }
   }
@@ -675,6 +735,7 @@ export class App implements OnInit {
   }
 
   async saveCashEntry(): Promise<void> {
+    if (!this.cashPending() && !await this.askConfirmation(`Ghi ${this.newCashEntry.amount.toLocaleString('vi-VN')} đ vào sổ thu chi?`, 'Ghi phiếu')) return;
     this.loading.set(true); this.error.set('');
     let savedSuccessfully = false;
     try {
@@ -686,6 +747,7 @@ export class App implements OnInit {
       sessionStorage.removeItem('hbpos_cash_pending');
       this.cashPending.set(false);
       this.newCashEntry = { kind: 'OperatingExpense', method: 'Cash', amount: 0, description: '' };
+      this.overlay.set(null);
       this.notice.set('Đã ghi nhận phiếu thu chi');
       savedSuccessfully = true;
     } catch (error) {
@@ -733,7 +795,7 @@ export class App implements OnInit {
       this.error.set('Chọn sản phẩm cần trả và nhập lý do ít nhất 5 ký tự.');
       return;
     }
-    if (!window.confirm('Xác nhận trả hàng, hoàn tiền và cập nhật kho theo tình trạng đã chọn?')) return;
+    if (!await this.askConfirmation('Xác nhận trả hàng, hoàn tiền và cập nhật kho theo tình trạng đã chọn?')) return;
     this.loading.set(true); this.error.set('');
     try {
       const key = sessionStorage.getItem('hbpos_return_key') || crypto.randomUUID();
@@ -745,6 +807,7 @@ export class App implements OnInit {
       sessionStorage.removeItem('hbpos_return_key');
       this.returnOrderId = '';
       this.returnLines.set([]);
+      this.overlay.set(null);
       this.notice.set('Đã ghi nhận trả hàng và hoàn tiền');
       await this.refresh();
     } catch (error) {

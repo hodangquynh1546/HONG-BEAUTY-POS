@@ -9,9 +9,11 @@ const { App } = await import('../src/app/app.ts');
 
 let failMovement = true;
 let failDaily = false;
+let statusChanges = 0;
 const api = {
   user: () => ({ role: 'Owner', fullName: 'Chủ cửa hàng' }),
   can: () => true,
+  patch: async () => { statusChanges++; },
   get: async path => {
     if (path.startsWith('/stock/movements')) {
       if (failMovement) throw new Error('stock movement unavailable');
@@ -47,3 +49,25 @@ assert.match(app.error(), /biểu đồ/);
 assert.equal(app.report()?.netRevenue, 123);
 assert.deepEqual(app.dailyTrend(), []);
 console.log('PASS: một API lỗi không chặn các màn khác hoặc báo cáo tổng hợp');
+
+const product = { id: 'product-1', name: 'Son môi', active: true, sku: 'SON-1', barcode: '', unit: 'cái', reorderLevel: 1, salePrice: 100000, costPrice: 50000, categoryId: null };
+app.page.set('products');
+app.createProduct();
+assert.equal(app.overlay(), 'product');
+assert.equal(app.page(), 'products');
+app.closeOverlay();
+assert.equal(app.overlay(), null);
+app.editProduct(product);
+assert.equal(app.editingProductId, product.id);
+app.closeOverlay();
+assert.equal(app.editingProductId, '');
+const cancelled = app.setProductActive(product);
+assert.match(app.confirmation()?.message ?? '', /Son môi/);
+app.answerConfirmation(false);
+await cancelled;
+assert.equal(statusChanges, 0);
+const accepted = app.setProductActive(product);
+app.answerConfirmation(true);
+await accepted;
+assert.equal(statusChanges, 1);
+console.log('PASS: form lớp phủ giữ trang hiện tại và xác nhận chặn thao tác khi hủy');

@@ -86,6 +86,9 @@ export class App implements OnInit {
   readonly cart = signal<Record<string, number>>(JSON.parse(sessionStorage.getItem('hbpos_cart') || '{}'));
   readonly cartItems = computed(() => this.products().filter(p => (this.cart()[p.id] || 0) > 0));
   readonly cartTotal = computed(() => this.cartItems().reduce((total, p) => total + p.salePrice * this.cart()[p.id], 0));
+  readonly discountPercent = signal(0);
+  readonly discountAmount = computed(() => Math.round(this.cartTotal() * this.discountPercent() / 100));
+  readonly payableTotal = computed(() => this.cartTotal() - this.discountAmount());
   readonly loading = signal(false);
   readonly error = signal('');
   readonly notice = signal('');
@@ -155,7 +158,7 @@ export class App implements OnInit {
     this.profileName = this.api.user()?.fullName ?? '';
     this.profileAvatarData = this.api.user()?.avatarData ?? '';
     if (this.api.user()) await this.refresh();
-    if (!this.pendingOrderId) this.paymentAmount = this.cartTotal();
+    if (!this.pendingOrderId) this.paymentAmount = this.payableTotal();
   }
 
   toggleSidebar(): void {
@@ -759,12 +762,18 @@ export class App implements OnInit {
     const quantity = Math.max(0, Math.min(product.quantity, (this.cart()[productId] || 0) + delta));
     this.cart.update(old => ({ ...old, [productId]: quantity }));
     sessionStorage.setItem('hbpos_cart', JSON.stringify(this.cart()));
-    this.paymentAmount = this.cartTotal();
+    this.paymentAmount = this.payableTotal();
+  }
+
+  updateDiscountPercent(value: number): void {
+    this.discountPercent.set(Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0);
+    if (!this.pendingOrderId) this.paymentAmount = this.payableTotal();
   }
 
   async checkout(): Promise<void> {
     if (!this.cartItems().length && !this.pendingOrderId) return;
-    if (!this.pendingOrderId && !await this.askConfirmation(`Tạo đơn ${this.cartTotal().toLocaleString('vi-VN')} đ và ghi nhận ${this.paymentAmount.toLocaleString('vi-VN')} đ thanh toán?`, 'Tạo đơn')) return;
+    if (!Number.isFinite(this.discountPercent()) || this.discountPercent() < 0 || this.discountPercent() > 100) { this.error.set('Giảm giá phải từ 0% đến 100%.'); return; }
+    if (!this.pendingOrderId && !await this.askConfirmation(`Tạo đơn ${this.payableTotal().toLocaleString('vi-VN')} đ sau giảm giá ${this.discountPercent()}% và ghi nhận ${this.paymentAmount.toLocaleString('vi-VN')} đ thanh toán?`, 'Tạo đơn')) return;
     this.loading.set(true); this.error.set('');
     try {
       if (!this.pendingOrderId) {
@@ -773,7 +782,7 @@ export class App implements OnInit {
         const order = await this.api.post<SalesOrder>('/orders', {
           idempotencyKey: key,
           customerId: this.selectedCustomerId || null,
-          discount: 0,
+          discount: this.discountAmount(),
           items: this.cartItems().map(p => ({ productId: p.id, quantity: this.cart()[p.id] }))
         });
         this.pendingOrderId = order.id;
@@ -788,6 +797,7 @@ export class App implements OnInit {
       }
       this.pendingOrderId = null;
       this.cart.set({});
+      this.discountPercent.set(0);
       this.selectedCustomerId = '';
       this.paymentAmount = 0;
       for (const key of ['hbpos_cart', 'hbpos_checkout_key', 'hbpos_pending_order', 'hbpos_payment_key']) sessionStorage.removeItem(key);

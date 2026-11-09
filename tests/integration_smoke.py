@@ -295,6 +295,18 @@ try:
     assert movement_after_adjustment['items'][0]['type'] == 'ADJUSTMENT'
     _, audit = call('GET','/api/v1/audit-events')
     assert any(event['action']=='OWNER_PASSWORD_RECOVERED' for event in audit)
+    discounted_key = str(__import__('uuid').uuid4())
+    _, discounted_order = call('POST','/api/v1/orders',{'idempotencyKey':discounted_key,'customerId':customer['id'],'discount':10,'items':[{'productId':pid,'quantity':1}]})
+    assert discounted_order['total'] == 90, discounted_order
+    _, discounted_repeat = call('POST','/api/v1/orders',{'idempotencyKey':discounted_key,'customerId':customer['id'],'discount':10,'items':[{'productId':pid,'quantity':1}]})
+    assert discounted_repeat['id'] == discounted_order['id']
+    _, discounted_payment = call('POST',f"/api/v1/orders/{discounted_order['id']}/payments",{'idempotencyKey':str(__import__('uuid').uuid4()),'method':'Cash','amount':90})
+    assert discounted_payment['amount'] == 90
+    _, discounted_receipt = call('GET',f"/api/v1/orders/{discounted_order['id']}/receipt")
+    assert discounted_receipt['discount'] == 10 and discounted_receipt['total'] == 90
+    _, discounted_stock = call('GET','/api/v1/stock')
+    assert next(x for x in discounted_stock if x['productId']==pid)['quantity'] == 6
+    print('PASS: percentage discount amount, payment, receipt, stock and idempotency')
     print('PASS: report balances')
     print('PASS: self profile, password change, and owner recovery')
     print('PASS: shared-IP login allowance and guarded stock adjustment')

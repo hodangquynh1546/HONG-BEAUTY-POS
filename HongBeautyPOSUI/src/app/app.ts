@@ -2,9 +2,9 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApiService, type Employee, type AuditEvent, type Product, type StockItem, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type Category, type Customer, type Supplier } from './core/api.service';
+import { ApiService, type Employee, type AuditEvent, type Product, type StockItem, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
 
-type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'reports' | 'employees' | 'audit';
+type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit';
 
 @Component({
   selector: 'app-root',
@@ -23,6 +23,7 @@ export class App implements OnInit {
   readonly suppliers = signal<Supplier[]>([]);
   readonly employees = signal<Employee[]>([]);
   readonly auditEvents = signal<AuditEvent[]>([]);
+  readonly cashEntries = signal<CashEntry[]>([]);
   readonly availablePermissions = signal<string[]>([]);
   readonly selectedEmployeeId = signal('');
   readonly selectedEmployee = computed(() => this.employees().find(e => e.id === this.selectedEmployeeId()) ?? null);
@@ -61,6 +62,8 @@ export class App implements OnInit {
   newSupplier = { code: '', name: '', phone: '', email: '' };
   editingSupplierId = '';
   newEmployee = { email: '', fullName: '', password: '' };
+  newCashEntry = { kind: 'OperatingExpense', method: 'Cash', amount: 0, description: '' };
+  readonly cashPending = signal(!!sessionStorage.getItem('hbpos_cash_pending'));
   resetEmployeePasswordInput = '';
   permissionSelection: Record<string, boolean> = {};
   adjustment = { productId: '', delta: 0, reason: '' };
@@ -198,6 +201,7 @@ export class App implements OnInit {
         this.stocktakes.set(await this.api.get<StocktakeSession[]>('/stocktakes'));
       }
       if (this.api.can('purchases.read')) this.purchases.set(await this.api.get<PurchaseReceipt[]>('/purchases'));
+      if (this.api.can('cash.read')) this.cashEntries.set(await this.api.get<CashEntry[]>('/cash-entries'));
       if (this.api.can('sales.read')) {
         await this.loadOrders(true);
         const pending = this.orders().find(o => o.id === this.pendingOrderId);
@@ -385,7 +389,7 @@ export class App implements OnInit {
       'payments.write': 'Nhận thanh toán', 'returns.write': 'Trả hàng và hoàn tiền',
       'customers.read': 'Xem khách hàng', 'customers.write': 'Tạo khách hàng',
       'suppliers.read': 'Xem nhà cung cấp', 'suppliers.write': 'Tạo nhà cung cấp',
-      'reports.read': 'Xem báo cáo'
+      'reports.read': 'Xem báo cáo', 'cash.read': 'Xem thu chi', 'cash.write': 'Ghi phiếu thu chi'
     };
     return labels[permission] || permission;
   }
@@ -580,6 +584,39 @@ export class App implements OnInit {
 
   paymentMethodLabel(method: string): string {
     return ({ Cash: 'Tiền mặt', BankTransfer: 'Chuyển khoản', QrBanking: 'QR ngân hàng' } as Record<string, string>)[method] ?? 'Phương thức khác';
+  }
+
+  cashKindLabel(kind: string): string {
+    return ({ OtherIncome: 'Thu khác', OperatingExpense: 'Chi vận hành', SupplierPayment: 'Thanh toán nhà cung cấp', OtherExpense: 'Chi khác' } as Record<string, string>)[kind] ?? 'Giao dịch khác';
+  }
+
+  async saveCashEntry(): Promise<void> {
+    this.loading.set(true); this.error.set('');
+    let savedSuccessfully = false;
+    try {
+      const saved = sessionStorage.getItem('hbpos_cash_pending');
+      const payload = saved ? JSON.parse(saved) : { ...this.newCashEntry, idempotencyKey: crypto.randomUUID() };
+      if (!saved) sessionStorage.setItem('hbpos_cash_pending', JSON.stringify(payload));
+      this.cashPending.set(true);
+      await this.api.post('/cash-entries', payload);
+      sessionStorage.removeItem('hbpos_cash_pending');
+      this.cashPending.set(false);
+      this.newCashEntry = { kind: 'OperatingExpense', method: 'Cash', amount: 0, description: '' };
+      this.notice.set('Đã ghi nhận phiếu thu chi');
+      savedSuccessfully = true;
+    } catch (error) {
+      if (error instanceof HttpErrorResponse && [400, 409].includes(error.status)) {
+        sessionStorage.removeItem('hbpos_cash_pending');
+        this.cashPending.set(false);
+      }
+      this.error.set('Chưa xác nhận được phiếu. Nếu mất mạng, bấm thử lại để dùng đúng mã giao dịch cũ, tránh ghi trùng.');
+    } finally { this.loading.set(false); }
+    if (savedSuccessfully) {
+      try {
+        if (this.api.can('cash.read')) this.cashEntries.set(await this.api.get<CashEntry[]>('/cash-entries'));
+        if (this.api.can('reports.read')) this.report.set(await this.api.get<ReportSummary>(`/reports/summary?from=${this.reportFrom}&to=${this.reportTo}`));
+      } catch { this.notice.set('Phiếu đã lưu; chưa tải lại được danh sách hoặc báo cáo. Bấm Làm mới để xem.'); }
+    }
   }
 
   auditActionLabel(action: string): string {

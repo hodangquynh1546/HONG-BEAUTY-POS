@@ -17,6 +17,7 @@ export interface PurchaseReceipt { id: string; receiptNo: string; supplierId: st
 export interface SalesOrder { id: string; orderNo: string; customerId: string | null; status: string; total: number; paidTotal: number; returnedTotal: number; refundedTotal: number; createdAt: string; }
 export interface OrderLine { id: string; productId: string; name: string; sku: string; quantity: number; unitPrice: number; }
 export interface OrderReceipt { id: string; orderNo: string; createdAt: string; status: string; customerName: string; sellerName: string; subtotal: number; discount: number; total: number; paidTotal: number; returnedTotal: number; refundedTotal: number; remainingDebt: number; items: { skuSnapshot: string; nameSnapshot: string; quantity: number; unitPrice: number; lineTotal: number }[]; payments: { method: string; amount: number; receivedAt: string }[]; }
+export interface CashEntry { id: string; kind: string; method: string; amount: number; description: string; creatorName: string; createdAt: string; }
 export interface ReportSummary { from: string; to: string; grossSales: number; returnedSales: number; netRevenue: number; cashReceived: number; cashRefunded: number; netCashFlow: number; costOfGoods: number; estimatedGrossProfit: number; inventoryValue: number; orderCount: number; unitsSold: number; lowStockProducts: number; outOfStockProducts: number; otherIncome: number; operatingExpenses: number; supplierPayments: number; otherExpenses: number; estimatedNetProfit: number; }
 
 @Injectable({ providedIn: 'root' })

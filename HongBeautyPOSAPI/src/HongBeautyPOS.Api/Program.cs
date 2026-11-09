@@ -647,8 +647,11 @@ protectedApi.MapPost("/orders/{id:guid}/returns", async (ClaimsPrincipal princip
 protectedApi.MapGet("/cash-entries", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
 {
     if (!await HasPermission(principal, db, "cash.read", ct)) return Results.Forbid();
-    return Results.Ok(await db.CashEntries.AsNoTracking().OrderByDescending(e => e.CreatedAt).Take(200)
-        .Select(e => new { e.Id, e.Kind, e.Method, e.Amount, e.Description, e.CreatedBy, e.CreatedAt }).ToListAsync(ct));
+    var entries = await db.CashEntries.AsNoTracking().OrderByDescending(e => e.CreatedAt).Take(200).ToListAsync(ct);
+    var userIds = entries.Select(e => e.CreatedBy).Distinct().ToArray();
+    var users = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+    return Results.Ok(entries.Select(e => new { e.Id, e.Kind, e.Method, e.Amount, e.Description, e.CreatedAt,
+        CreatorName = users.GetValueOrDefault(e.CreatedBy, "Người dùng đã ngừng hoạt động") }));
 });
 protectedApi.MapPost("/cash-entries", async (ClaimsPrincipal principal, PosDbContext db, CreateCashEntryRequest request, CancellationToken ct) =>
 {

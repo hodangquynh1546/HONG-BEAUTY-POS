@@ -175,6 +175,15 @@ try:
     assert report['cashRefunded']==100, report
     assert report['netCashFlow']==100, report
     assert report['costOfGoods']==50, report
+    cash_key = str(__import__('uuid').uuid4())
+    cash_payload = {'idempotencyKey':cash_key,'kind':'OtherIncome','method':'BankTransfer','amount':25,'description':'Thu khác kiểm thử'}
+    _, cash_entry = call('POST','/api/v1/cash-entries',cash_payload)
+    _, repeated_cash_entry = call('POST','/api/v1/cash-entries',cash_payload)
+    assert cash_entry['id'] == repeated_cash_entry['id']
+    _, cash_entries = call('GET','/api/v1/cash-entries')
+    assert len(cash_entries) == 1 and cash_entries[0]['creatorName'] == 'Test Owner'
+    _, report_after_cash = call('GET','/api/v1/reports/summary')
+    assert report_after_cash['netRevenue'] == 100 and report_after_cash['otherIncome'] == 25 and report_after_cash['netCashFlow'] == 125
     print('PASS: report balances')
     print('PASS: employee permission and deactivation checks')
     print('PASS: migrate, bootstrap, login, product, supplier, purchase, sale, payment, return, stocktake')

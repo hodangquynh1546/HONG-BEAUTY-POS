@@ -29,6 +29,7 @@
         @if (api.can('purchases.read')) { <button [class.active]="page() === 'purchases'" (click)="page.set('purchases')">Nhập hàng</button> }
         @if (api.can('sales.write')) { <button [class.active]="page() === 'pos'" (click)="page.set('pos')">Bán hàng</button> }
         @if (api.can('sales.read')) { <button [class.active]="page() === 'orders'" (click)="page.set('orders')">Đơn hàng</button> }
+        @if (api.can('cash.read') || api.can('cash.write')) { <button [class.active]="page() === 'cash'" (click)="page.set('cash')">Thu chi</button> }
         @if (api.can('reports.read')) { <button [class.active]="page() === 'reports'" (click)="page.set('reports')">Báo cáo</button> }
         @if (api.user()?.role === 'Owner') { <button [class.active]="page() === 'employees'" (click)="page.set('employees')">Nhân viên</button> }
         @if (api.user()?.role === 'Owner') { <button [class.active]="page() === 'audit'" (click)="page.set('audit')">Nhật ký</button> }
@@ -36,7 +37,7 @@
       <div class="account"><span class="avatar">{{ api.user()?.fullName?.slice(0, 1) }}</span><div><b>{{ api.user()?.fullName }}</b><small>{{ api.user()?.role === 'Owner' ? 'Chủ cửa hàng' : 'Nhân viên' }}</small></div><button class="logout" (click)="api.logout()" title="Đăng xuất">↪</button></div>
     </aside>
     <main class="content">
-      <header><div><p class="eyebrow">MIÊU / QUẢN LÝ</p><h1>{{ page() === 'overview' ? 'Tổng quan' : page() === 'products' ? 'Sản phẩm' : page() === 'categories' ? 'Danh mục' : page() === 'customers' ? 'Khách hàng' : page() === 'suppliers' ? 'Nhà cung cấp' : page() === 'stock' ? 'Tồn kho' : page() === 'stocktakes' ? 'Kiểm kho' : page() === 'purchases' ? 'Nhập hàng' : page() === 'pos' ? 'Bán hàng' : page() === 'orders' ? 'Đơn hàng' : page() === 'reports' ? 'Báo cáo' : page() === 'audit' ? 'Nhật ký' : 'Nhân viên' }}</h1></div><button class="refresh" (click)="refresh()" [disabled]="loading()">Làm mới</button></header>
+      <header><div><p class="eyebrow">MIÊU / QUẢN LÝ</p><h1>{{ page() === 'overview' ? 'Tổng quan' : page() === 'products' ? 'Sản phẩm' : page() === 'categories' ? 'Danh mục' : page() === 'customers' ? 'Khách hàng' : page() === 'suppliers' ? 'Nhà cung cấp' : page() === 'stock' ? 'Tồn kho' : page() === 'stocktakes' ? 'Kiểm kho' : page() === 'purchases' ? 'Nhập hàng' : page() === 'pos' ? 'Bán hàng' : page() === 'orders' ? 'Đơn hàng' : page() === 'cash' ? 'Thu chi' : page() === 'reports' ? 'Báo cáo' : page() === 'audit' ? 'Nhật ký' : 'Nhân viên' }}</h1></div><button class="refresh" (click)="refresh()" [disabled]="loading()">Làm mới</button></header>
       @if (error()) { <div class="alert error">{{ error() }}</div> }
       @if (notice()) { <div class="alert success">{{ notice() }}</div> }
       @if (loading()) { <p class="muted">Đang tải dữ liệu...</p> }
@@ -157,6 +158,23 @@
             <button class="primary" [disabled]="loading()" (click)="submitReturn()">Xác nhận trả hàng</button>
           </section>
         }
+      }
+      @if (page() === 'cash') {
+        <div class="columns">
+          @if (api.can('cash.read')) { <section class="panel grow"><h2>Lịch sử thu chi</h2><p class="hint">Tiền bán hàng được ghi ở đơn bán; bảng này dành cho các khoản thu, chi khác để không tính doanh thu hai lần.</p>
+            @if (cashEntries().length) { <div class="table-wrap"><table><thead><tr><th>Thời gian</th><th>Loại</th><th>Phương thức</th><th>Số tiền</th><th>Nội dung</th><th>Người ghi</th></tr></thead><tbody>@for (entry of cashEntries(); track entry.id) { <tr><td>{{ formatVietnamTime(entry.createdAt) }}</td><td>{{ cashKindLabel(entry.kind) }}</td><td>{{ paymentMethodLabel(entry.method) }}</td><td>{{ entry.amount | currency:'VND':'symbol':'1.0-0' }}</td><td>{{ entry.description }}</td><td>{{ entry.creatorName }}</td></tr> }</tbody></table></div> }
+            @else { <div class="empty">Chưa có phiếu thu chi nào.</div> }
+          </section> }
+          @if (api.can('cash.write')) { <section class="panel form-panel"><h2>Ghi phiếu thu chi</h2>
+            @if (cashPending()) { <p class="hint">Có phiếu đang chờ xác nhận. Bấm thử lại với cùng mã để tránh ghi trùng.</p> }
+            <form (ngSubmit)="saveCashEntry()"><label>Loại giao dịch<select name="cashKind" [(ngModel)]="newCashEntry.kind" [disabled]="cashPending()"><option value="OtherIncome">Thu khác</option><option value="OperatingExpense">Chi vận hành</option><option value="SupplierPayment">Thanh toán nhà cung cấp</option><option value="OtherExpense">Chi khác</option></select></label>
+              <label>Phương thức<select name="cashMethod" [(ngModel)]="newCashEntry.method" [disabled]="cashPending()"><option value="Cash">Tiền mặt</option><option value="BankTransfer">Chuyển khoản</option><option value="QrBanking">QR ngân hàng</option></select></label>
+              <label>Số tiền<input name="cashAmount" type="number" min="1" step="1" [(ngModel)]="newCashEntry.amount" [disabled]="cashPending()" required></label>
+              <label>Nội dung<input name="cashDescription" maxlength="500" [(ngModel)]="newCashEntry.description" [disabled]="cashPending()" required></label>
+              <button class="primary" [disabled]="loading()">{{ cashPending() ? 'Thử lại phiếu đang chờ' : 'Ghi nhận phiếu' }}</button>
+            </form><p class="hint">Không ghi tiền bán hàng tại đây; hãy nhận thanh toán trên đơn bán.</p>
+          </section> }
+        </div>
       }
       @if (page() === 'reports' && api.can('reports.read')) {
         <section class="panel"><h2>Báo cáo kinh doanh</h2><form (ngSubmit)="loadReport()" class="columns"><label>Từ ngày<input type="date" name="reportFrom" [(ngModel)]="reportFrom" required></label><label>Đến ngày<input type="date" name="reportTo" [(ngModel)]="reportTo" required></label><button class="primary" [disabled]="loading()">Xem báo cáo</button></form><p class="hint">Doanh thu ghi theo ngày bán; tiền mặt theo ngày thu/hoàn. Giờ tính theo Việt Nam. Lãi gộp chưa trừ chi phí vận hành; lợi nhuận ước tính đã trừ chi vận hành và chi khác.</p></section>

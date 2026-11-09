@@ -1,7 +1,7 @@
 @if (!api.user()) {
   <main class="login-page">
     <section class="login-card">
-      <div class="login-avatar"><div class="mark">M</div></div>
+      <div class="login-avatar"><img class="system-logo login-system-logo" src="/mieu-logo.jpg" alt="Logo H Nail Shop"></div>
       <h1>Miêu chào mừng bạn trở lại</h1>
       <form (ngSubmit)="login()">
         @if (api.isNative) { <label>Địa chỉ máy chủ HTTPS<input type="url" name="serverUrl" [(ngModel)]="serverUrlInput" placeholder="https://pos.congty-cua-ban.com" required autocomplete="url"></label> }
@@ -18,7 +18,7 @@
 } @else {
   <div class="shell" [class.sidebar-is-collapsed]="sidebarCollapsed()">
     <aside class="sidebar" aria-label="Điều hướng chính">
-      <div class="brand"><div class="mark">M</div><div class="brand-name"><strong>Miêu</strong><small>QUẢN LÝ BÁN HÀNG</small></div><button class="sidebar-toggle" type="button" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed() ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'" [attr.title]="sidebarCollapsed() ? 'Mở rộng' : 'Thu gọn'"><span class="material-symbols-outlined">{{ sidebarCollapsed() ? 'left_panel_open' : 'left_panel_close' }}</span></button></div>
+      <div class="brand"><img class="system-logo sidebar-system-logo" src="/mieu-logo.jpg" alt="Logo H Nail Shop"><div class="brand-name"><strong>Miêu</strong><small>QUẢN LÝ BÁN HÀNG</small></div><button class="sidebar-toggle" type="button" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed() ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'" [attr.title]="sidebarCollapsed() ? 'Mở rộng' : 'Thu gọn'"><span class="material-symbols-outlined">{{ sidebarCollapsed() ? 'left_panel_open' : 'left_panel_close' }}</span></button></div>
       <nav>
         <button title="Tổng quan" [class.active]="page() === 'overview'" (click)="page.set('overview')"><span class="material-symbols-outlined">dashboard</span><span class="nav-label">Tổng quan</span></button>
         @if (api.can('products.read')) { <button title="Sản phẩm" [class.active]="page() === 'products'" (click)="page.set('products')"><span class="material-symbols-outlined">inventory_2</span><span class="nav-label">Sản phẩm</span></button> }

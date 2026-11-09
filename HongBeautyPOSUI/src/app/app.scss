@@ -30,4 +30,5 @@
 .product-chart-row{display:grid;grid-template-columns:minmax(85px,140px) minmax(0,1fr) 40px;align-items:center;gap:10px;margin:11px 0;font-size:.8rem}.product-chart-row>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.product-chart-row strong{text-align:right}
 .side-form{width:340px;max-width:100%}.stocktake-detail{flex:1;min-width:0}.stocktake-detail .table-wrap{max-height:62vh}.stocktake-detail input{min-width:95px}.audit-detail{max-width:760px}
 .password-field{display:block;position:relative}.password-field input{padding-right:50px}.password-toggle{position:absolute;top:7px;right:3px;width:42px;height:43px;border:0;background:transparent;color:#62293e;display:grid;place-items:center;border-radius:7px}.password-toggle:hover,.password-toggle:focus-visible{background:#f4e9ec;outline:2px solid #88475e}
+.system-logo{display:block;object-fit:cover;background:#080808}.login-system-logo{width:148px;height:148px;border-radius:18px;margin-bottom:24px;box-shadow:0 12px 30px #1d111628}.sidebar-system-logo{width:44px;height:44px;flex:none;border-radius:10px}
 @media(max-width:900px){.side-form,.stocktake-detail{width:100%}}

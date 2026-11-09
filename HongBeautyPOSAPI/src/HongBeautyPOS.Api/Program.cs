@@ -109,7 +109,7 @@ if (args.Contains("--bootstrap-owner", StringComparer.Ordinal))
     var email = Environment.GetEnvironmentVariable("OWNER_EMAIL")?.Trim().ToLowerInvariant();
     var name = Environment.GetEnvironmentVariable("OWNER_NAME")?.Trim();
     var password = Environment.GetEnvironmentVariable("OWNER_PASSWORD");
-    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(name) || password is null || password.Length < 14 ||
+    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(name) || password is null || password.StartsWith("CHANGE_ME", StringComparison.OrdinalIgnoreCase) || password.Length < 14 ||
         !password.Any(char.IsUpper) || !password.Any(char.IsLower) || !password.Any(char.IsDigit) || password.All(char.IsLetterOrDigit))
         throw new InvalidOperationException("OWNER_EMAIL, OWNER_NAME and a strong OWNER_PASSWORD are required");
     db.Users.Add(new User { Email = email, FullName = name, PasswordHash = BCrypt.Net.BCrypt.HashPassword(password), Role = UserRole.Owner });
@@ -133,11 +133,14 @@ if (string.Equals(Environment.GetEnvironmentVariable("BOOTSTRAP_OWNER_ON_START")
         var email = Environment.GetEnvironmentVariable("OWNER_EMAIL")?.Trim().ToLowerInvariant();
         var name = Environment.GetEnvironmentVariable("OWNER_NAME")?.Trim();
         var password = Environment.GetEnvironmentVariable("OWNER_PASSWORD");
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(name) || password is null || password.Length < 14 ||
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(name) || password is null || password.StartsWith("CHANGE_ME", StringComparison.OrdinalIgnoreCase) || password.Length < 14 ||
             !password.Any(char.IsUpper) || !password.Any(char.IsLower) || !password.Any(char.IsDigit) || password.All(char.IsLetterOrDigit))
-            throw new InvalidOperationException("OWNER_EMAIL, OWNER_NAME and a strong OWNER_PASSWORD are required for initial setup");
-        db.Users.Add(new User { Email = email, FullName = name, PasswordHash = BCrypt.Net.BCrypt.HashPassword(password), Role = UserRole.Owner });
-        await db.SaveChangesAsync();
+            app.Logger.LogWarning("Owner setup is pending: set valid OWNER_EMAIL, OWNER_NAME and OWNER_PASSWORD in the service environment, then redeploy.");
+        else
+        {
+            db.Users.Add(new User { Email = email, FullName = name, PasswordHash = BCrypt.Net.BCrypt.HashPassword(password), Role = UserRole.Owner });
+            await db.SaveChangesAsync();
+        }
     }
 }
 

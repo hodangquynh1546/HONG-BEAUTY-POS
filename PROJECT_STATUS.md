@@ -14,6 +14,7 @@
 - PostgreSQL 16 riêng cho kiểm thử: áp dụng 7 migration thành công; khởi động với `RUN_MIGRATIONS_ON_START=true`, tạo Chủ sở hữu ban đầu, `/health` trả 200 và đăng nhập Chủ sở hữu trả 200.
 - Tìm khách hàng theo tên, số điện thoại hoặc email có phân trang; màn hình khách hàng và quầy bán có ô tìm. PostgreSQL smoke test xác nhận lọc, phân trang, ký tự `%` là chữ thường, chặn tham số sai và yêu cầu đăng nhập.
 - Tìm đơn hàng theo mã, trạng thái, ngày Việt Nam và người bán, có phân trang. PostgreSQL smoke test xác nhận lọc, phân trang, chặn tham số sai, chặn truy cập ẩn danh và chỉ Chủ sở hữu được lọc theo người bán.
+- Sửa khởi động Render khi chưa có biến `OWNER_*`: dịch vụ ghi cảnh báo và vẫn chạy; khi nhập đủ thông tin hợp lệ rồi triển khai lại thì tạo Chủ sở hữu. PostgreSQL smoke test trên database mới xác nhận `/health` trả 200 trước khi thiết lập, đăng nhập trả 401 trước và 200 sau khi nhập thông tin.
 
 ## Chưa xác minh
 

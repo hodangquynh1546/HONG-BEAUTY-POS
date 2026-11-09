@@ -60,6 +60,7 @@ export class App implements OnInit {
   newSupplier = { code: '', name: '', phone: '', email: '' };
   editingSupplierId = '';
   newEmployee = { email: '', fullName: '', password: '' };
+  resetEmployeePasswordInput = '';
   permissionSelection: Record<string, boolean> = {};
   adjustment = { productId: '', delta: 0, reason: '' };
   purchaseLines = [{ productId: '', quantity: 1, unitCost: 0 }];
@@ -358,7 +359,20 @@ export class App implements OnInit {
 
   selectEmployee(employee: Employee): void {
     this.selectedEmployeeId.set(employee.id);
+    this.resetEmployeePasswordInput = '';
     this.permissionSelection = Object.fromEntries(this.availablePermissions().map(permission => [permission, employee.permissions.includes(permission)]));
+  }
+
+  async resetEmployeePassword(): Promise<void> {
+    const employee = this.selectedEmployee();
+    if (!employee || !confirm(`Đặt lại mật khẩu cho ${employee.fullName}?`)) return;
+    this.loading.set(true); this.error.set('');
+    try {
+      await this.api.put(`/employees/${employee.id}/password`, { password: this.resetEmployeePasswordInput });
+      this.resetEmployeePasswordInput = '';
+      this.notice.set(`Đã đặt lại mật khẩu cho ${employee.fullName}; phiên đăng nhập cũ sẽ hết hiệu lực.`);
+    } catch { this.error.set('Không đổi được mật khẩu. Cần 14–128 ký tự gồm chữ hoa, chữ thường, số và ký tự đặc biệt.'); }
+    finally { this.loading.set(false); }
   }
 
   permissionLabel(permission: string): string {

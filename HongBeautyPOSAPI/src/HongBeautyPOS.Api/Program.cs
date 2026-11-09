@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -44,6 +45,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
         ValidateLifetime = true,
         ClockSkew = TimeSpan.FromSeconds(30)
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            if (!Guid.TryParse(context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub), out var id))
+            {
+                context.Fail("Invalid user");
+                return;
+            }
+            var db = context.HttpContext.RequestServices.GetRequiredService<PosDbContext>();
+            var user = await db.Users.AsNoTracking().Where(u => u.Id == id && u.Active)
+                .Select(u => new { u.PasswordHash }).SingleOrDefaultAsync(context.HttpContext.RequestAborted);
+            var version = user is null ? null : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(user.PasswordHash)));
+            if (version is null || !string.Equals(context.Principal?.FindFirstValue("pwdv"), version, StringComparison.Ordinal))
+                context.Fail("Session expired");
+        }
     };
 });
 builder.Services.AddAuthorization();
@@ -154,7 +172,7 @@ api.MapPost("/auth/login", async (LoginRequest request, PosDbContext db) =>
         return Results.Unauthorized();
     var token = new JwtSecurityToken(
         issuer: "HongBeautyPOS", audience: "HongBeautyPOSUI",
-        claims: [new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()), new Claim(ClaimTypes.Role, user.Role.ToString())],
+        claims: [new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()), new Claim(ClaimTypes.Role, user.Role.ToString()), new Claim("pwdv", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(user.PasswordHash))))],
         notBefore: DateTime.UtcNow, expires: DateTime.UtcNow.AddMinutes(15),
         signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)), SecurityAlgorithms.HmacSha256));
     return Results.Ok(new { accessToken = new JwtSecurityTokenHandler().WriteToken(token), role = user.Role.ToString() });
@@ -719,6 +737,21 @@ protectedApi.MapPatch("/employees/{id:guid}/status", async (ClaimsPrincipal prin
     return Results.Ok(new { employee.Id, employee.Active });
 });
 
+protectedApi.MapPut("/employees/{id:guid}/password", async (ClaimsPrincipal principal, PosDbContext db, Guid id, ResetEmployeePasswordRequest request, CancellationToken ct) =>
+{
+    if (!await IsOwner(principal, db, ct)) return Results.Forbid();
+    var password = request.Password;
+    if (string.IsNullOrEmpty(password) || password.Length < 14 || password.Length > 128 ||
+        !password.Any(char.IsUpper) || !password.Any(char.IsLower) || !password.Any(char.IsDigit) || password.All(char.IsLetterOrDigit))
+        return Results.BadRequest(new { error = "Mật khẩu mới phải dài 14–128 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt" });
+    var employee = await db.Users.SingleOrDefaultAsync(u => u.Id == id && u.Role == UserRole.Employee, ct);
+    if (employee is null) return Results.NotFound();
+    employee.PasswordHash = BCrypt.Net.BCrypt.HashPassword(password);
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "EMPLOYEE_PASSWORD_RESET", SubjectId = employee.Id });
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
 protectedApi.MapGet("/audit-events", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
 {
     if (!await IsOwner(principal, db, ct)) return Results.Forbid();
@@ -750,6 +783,7 @@ sealed record LoginRequest(string Email, string Password);
 sealed record CreateEmployeeRequest(string Email, string FullName, string Password, string[]? Permissions);
 sealed record ReplacePermissionsRequest(string[]? Permissions);
 sealed record SetEmployeeStatusRequest(bool Active);
+sealed record ResetEmployeePasswordRequest(string Password);
 sealed record ActiveStatusRequest(bool Active);
 sealed record CreateCategoryRequest(string Name, Guid? ParentId);
 sealed record CreateCustomerRequest(string FullName, string? Phone, string? Email);

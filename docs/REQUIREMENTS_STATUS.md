@@ -5,7 +5,7 @@ Kiểm tra trên source ở nhánh `main` ngày 2026-11-09. `training-doc.md` kh
 | Nhóm yêu cầu | Trạng thái từ source hiện tại | Phần cần hoàn thiện / xác minh |
 | --- | --- | --- |
 | Một backend, một database, Desktop và Mobile | Web và API cùng origin; Android/iOS là native project Capacitor dùng cùng API | Chưa build hoặc thử trên thiết bị thật; thiếu một số màn hình mobile riêng |
-| Owner, Employee, permission | Có hai role và kiểm tra quyền ở API; Owner bootstrap; quản lý nhân viên | Cần kiểm thử toàn bộ ma trận quyền, đặt lại mật khẩu và khóa phiên |
+| Owner, Employee, permission | Có hai role và kiểm tra quyền ở API; Owner bootstrap; quản lý nhân viên, đặt lại mật khẩu và vô hiệu phiên cũ khi đổi mật khẩu/khóa tài khoản | Cần kiểm thử toàn bộ ma trận quyền và hoàn thiện chỉnh sửa thông tin nhân viên |
 | Dashboard | Có báo cáo tổng hợp lấy từ PostgreSQL | Thiếu bộ lọc nhanh, biểu đồ, đơn mới, hàng bán chạy, phân bố thanh toán |
 | Sản phẩm và danh mục | Có CRUD/status, SKU, mã vạch, đơn vị, ngưỡng cảnh báo, tồn và danh mục cha/con; tìm theo tên, SKU hoặc mã vạch | Thiếu import/export Excel, nhiều ảnh, biến thể, thương hiệu và bộ lọc đầy đủ |
 | Kho, nhập và kiểm kho | Có phiếu nhập, điều chỉnh, stock movement, kiểm kho và giao dịch database | Thiếu vòng đời Draft/Cancelled của phiếu nhập, báo hàng tồn lâu, xuất kho theo lý do chuẩn hóa; cần thử tải đồng thời |

@@ -58,16 +58,36 @@ try:
     call('PUT',f"/api/v1/employees/{employee['id']}/permissions",{'permissions':['products.read','reports.read']})
     token = employee_auth['accessToken']
     call('GET','/api/v1/reports/summary')
+    try:
+        call('PUT',f"/api/v1/employees/{employee['id']}/password",{'password':'Forbidden9!Password'})
+        raise AssertionError('Employee changed their own password through Owner endpoint')
+    except RuntimeError as error:
+        assert 'HTTP 403' in str(error), error
+    token = owner_token
+    replacement_password = 'C7!' + secrets.token_urlsafe(20)
+    call('PUT',f"/api/v1/employees/{employee['id']}/password",{'password':replacement_password})
+    token = employee_auth['accessToken']
+    try:
+        call('GET','/api/v1/products')
+        raise AssertionError('Old token survived employee password reset')
+    except RuntimeError as error:
+        assert 'HTTP 401' in str(error), error
+    try:
+        call('POST','/api/v1/auth/login',{'email':employee_email,'password':employee_password})
+        raise AssertionError('Old employee password still works')
+    except RuntimeError as error:
+        assert 'HTTP 401' in str(error), error
+    _, employee_auth = call('POST','/api/v1/auth/login',{'email':employee_email,'password':replacement_password})
     token = owner_token
     call('PATCH',f"/api/v1/employees/{employee['id']}/status",{'active':False})
     _, audit = call('GET','/api/v1/audit-events')
-    assert {'EMPLOYEE_CREATED','EMPLOYEE_PERMISSIONS_REPLACED','EMPLOYEE_DEACTIVATED'}.issubset({event['action'] for event in audit})
+    assert {'EMPLOYEE_CREATED','EMPLOYEE_PERMISSIONS_REPLACED','EMPLOYEE_PASSWORD_RESET','EMPLOYEE_DEACTIVATED'}.issubset({event['action'] for event in audit})
     token = employee_auth['accessToken']
     try:
         call('GET','/api/v1/products')
         raise AssertionError('Deactivated employee unexpectedly accessed products')
     except RuntimeError as error:
-        assert 'HTTP 403' in str(error), error
+        assert 'HTTP 401' in str(error), error
     token = owner_token
     _, category = call('POST','/api/v1/categories',{'name':'Cosmetics'})
     _, child = call('POST','/api/v1/categories',{'name':'Lipstick','parentId':category['id']})
@@ -98,7 +118,7 @@ try:
         call('PATCH',f'/api/v1/products/{pid}/status',{'active':False})
         raise AssertionError('Employee without products.write changed a product')
     except RuntimeError as error:
-        assert 'HTTP 403' in str(error), error
+        assert 'HTTP 401' in str(error), error
     token = owner_token
     _, updated = call('PUT',f'/api/v1/products/{pid}',{'sku':product['sku'],'barcode':barcode,'name':'Updated lipstick','unit':'hộp','reorderLevel':5,'salePrice':100,'costPrice':50})
     assert updated['barcode'] == barcode and updated['unit'] == 'hộp' and updated['reorderLevel'] == 5

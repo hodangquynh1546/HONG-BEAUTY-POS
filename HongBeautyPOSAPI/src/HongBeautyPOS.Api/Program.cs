@@ -774,8 +774,27 @@ protectedApi.MapPut("/employees/{id:guid}/password", async (ClaimsPrincipal prin
 protectedApi.MapGet("/audit-events", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
 {
     if (!await IsOwner(principal, db, ct)) return Results.Forbid();
-    return Results.Ok(await db.AuditEvents.AsNoTracking().OrderByDescending(e => e.CreatedAt)
-        .Take(100).Select(e => new { e.Id, e.ActorId, e.Action, e.SubjectId, e.CreatedAt }).ToListAsync(ct));
+    var events = await db.AuditEvents.AsNoTracking().OrderByDescending(e => e.CreatedAt).Take(100).ToListAsync(ct);
+    var ids = events.SelectMany(e => new[] { e.ActorId, e.SubjectId }).Distinct().ToArray();
+    var users = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+    var products = await db.Products.AsNoTracking().Where(p => ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Name, ct);
+    var categories = await db.Categories.AsNoTracking().Where(c => ids.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+    var customers = await db.Customers.AsNoTracking().Where(c => ids.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.FullName, ct);
+    var suppliers = await db.Suppliers.AsNoTracking().Where(s => ids.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Name, ct);
+    var orders = await db.SalesOrders.AsNoTracking().Where(o => ids.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.OrderNo, ct);
+    var returns = await (from r in db.SalesReturns.AsNoTracking() join o in db.SalesOrders.AsNoTracking() on r.OrderId equals o.Id
+        where ids.Contains(r.Id) select new { r.Id, o.OrderNo }).ToDictionaryAsync(x => x.Id, x => x.OrderNo, ct);
+    var entries = await db.CashEntries.AsNoTracking().Where(e => ids.Contains(e.Id)).ToDictionaryAsync(e => e.Id, e => e.Description, ct);
+    return Results.Ok(events.Select(e => new { e.Id, e.ActorId, e.SubjectId, e.Action, e.CreatedAt,
+        ActorName = users.GetValueOrDefault(e.ActorId, "Người dùng đã ngừng hoạt động"),
+        SubjectName = e.Action.StartsWith("EMPLOYEE_", StringComparison.Ordinal) ? users.GetValueOrDefault(e.SubjectId, "Nhân viên") :
+            e.Action.StartsWith("PRODUCT_", StringComparison.Ordinal) ? products.GetValueOrDefault(e.SubjectId, "Sản phẩm") :
+            e.Action.StartsWith("CATEGORY_", StringComparison.Ordinal) ? categories.GetValueOrDefault(e.SubjectId, "Danh mục") :
+            e.Action.StartsWith("CUSTOMER_", StringComparison.Ordinal) ? customers.GetValueOrDefault(e.SubjectId, "Khách hàng") :
+            e.Action.StartsWith("SUPPLIER_", StringComparison.Ordinal) ? suppliers.GetValueOrDefault(e.SubjectId, "Nhà cung cấp") :
+            e.Action.StartsWith("SALE_RETURN_", StringComparison.Ordinal) ? "Đơn " + returns.GetValueOrDefault(e.SubjectId, "đã trả hàng") :
+            e.Action.StartsWith("SALE_", StringComparison.Ordinal) ? "Đơn " + orders.GetValueOrDefault(e.SubjectId, "bán hàng") :
+            e.Action.StartsWith("CASH_", StringComparison.Ordinal) ? entries.GetValueOrDefault(e.SubjectId, "Phiếu thu chi") : "Giao dịch" }));
 });
 
 if (Directory.Exists(Path.Combine(app.Environment.ContentRootPath, "wwwroot")))

@@ -570,6 +570,36 @@ export class App implements OnInit {
     return new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
   }
 
+  orderStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      Unpaid: 'Chưa thanh toán', PartiallyPaid: 'Thanh toán một phần', Paid: 'Đã thanh toán',
+      PartiallyReturned: 'Đã trả một phần', Returned: 'Đã trả toàn bộ', Cancelled: 'Đã hủy'
+    };
+    return labels[status] ?? 'Trạng thái chưa xác định';
+  }
+
+  paymentMethodLabel(method: string): string {
+    return ({ Cash: 'Tiền mặt', BankTransfer: 'Chuyển khoản', QrBanking: 'QR ngân hàng' } as Record<string, string>)[method] ?? 'Phương thức khác';
+  }
+
+  auditActionLabel(action: string): string {
+    const labels: Record<string, string> = {
+      EMPLOYEE_CREATED: 'Tạo nhân viên', EMPLOYEE_PERMISSIONS_REPLACED: 'Cập nhật quyền nhân viên',
+      EMPLOYEE_PASSWORD_RESET: 'Đặt lại mật khẩu nhân viên', EMPLOYEE_ACTIVATED: 'Mở khóa nhân viên',
+      EMPLOYEE_DEACTIVATED: 'Khóa nhân viên', PRODUCT_UPDATED: 'Sửa sản phẩm',
+      PRODUCT_ACTIVATED: 'Mở bán sản phẩm', PRODUCT_DEACTIVATED: 'Ngừng bán sản phẩm',
+      CATEGORY_UPDATED: 'Sửa danh mục', CATEGORY_ACTIVATED: 'Mở danh mục', CATEGORY_DEACTIVATED: 'Ngừng danh mục',
+      CUSTOMER_UPDATED: 'Sửa khách hàng', CUSTOMER_ACTIVATED: 'Mở khách hàng', CUSTOMER_DEACTIVATED: 'Ngừng khách hàng',
+      SUPPLIER_UPDATED: 'Sửa nhà cung cấp', SUPPLIER_ACTIVATED: 'Mở nhà cung cấp', SUPPLIER_DEACTIVATED: 'Ngừng nhà cung cấp',
+      SALE_RETURN_CREATED: 'Tạo phiếu trả hàng', CASH_ENTRY_CREATED: 'Ghi phiếu thu chi'
+    };
+    return labels[action] ?? 'Thao tác hệ thống';
+  }
+
+  orderNo(orderId: string): string {
+    return this.orders().find(order => order.id === orderId)?.orderNo ?? 'đang tải';
+  }
+
   windowPrint(): void { window.print(); }
 
   async submitReturn(): Promise<void> {

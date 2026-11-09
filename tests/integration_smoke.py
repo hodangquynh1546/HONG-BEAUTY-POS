@@ -82,6 +82,8 @@ try:
     call('PATCH',f"/api/v1/employees/{employee['id']}/status",{'active':False})
     _, audit = call('GET','/api/v1/audit-events')
     assert {'EMPLOYEE_CREATED','EMPLOYEE_PERMISSIONS_REPLACED','EMPLOYEE_PASSWORD_RESET','EMPLOYEE_DEACTIVATED'}.issubset({event['action'] for event in audit})
+    assert all(event['actorName'] and event['subjectName'] for event in audit)
+    assert any(event['action'] == 'EMPLOYEE_PASSWORD_RESET' and event['subjectName'] == 'Test Employee' for event in audit)
     token = employee_auth['accessToken']
     try:
         call('GET','/api/v1/products')

@@ -9,7 +9,7 @@ export interface Category { id: string; name: string; parentId: string | null; a
 export interface Customer { id: string; fullName: string; phone: string | null; email: string | null; active: boolean; }
 export interface Supplier { id: string; code: string; name: string; phone: string | null; email: string | null; active: boolean; }
 export interface Employee { id: string; email: string; fullName: string; active: boolean; permissions: string[]; }
-export interface AuditEvent { id: string; actorId: string; action: string; subjectId: string; createdAt: string; }
+export interface AuditEvent { id: string; actorId: string; actorName: string; action: string; subjectId: string; subjectName: string; createdAt: string; }
 export interface StockItem { productId: string; sku: string; name: string; quantity: number; reorderLevel: number; }
 export interface StocktakeLine { id: string; productId: string; sku: string; name: string; expectedQuantity: number; actualQuantity: number | null; }
 export interface StocktakeSession { id: string; status: 'Draft' | 'Completed'; createdAt: string; completedAt: string | null; items: StocktakeLine[]; }
@@ -17,7 +17,7 @@ export interface PurchaseReceipt { id: string; receiptNo: string; supplierId: st
 export interface SalesOrder { id: string; orderNo: string; customerId: string | null; status: string; total: number; paidTotal: number; returnedTotal: number; refundedTotal: number; createdAt: string; }
 export interface OrderLine { id: string; productId: string; name: string; sku: string; quantity: number; unitPrice: number; }
 export interface OrderReceipt { id: string; orderNo: string; createdAt: string; status: string; customerName: string; sellerName: string; subtotal: number; discount: number; total: number; paidTotal: number; returnedTotal: number; refundedTotal: number; remainingDebt: number; items: { skuSnapshot: string; nameSnapshot: string; quantity: number; unitPrice: number; lineTotal: number }[]; payments: { method: string; amount: number; receivedAt: string }[]; }
-export interface ReportSummary { from: string; to: string; grossSales: number; returnedSales: number; netRevenue: number; cashReceived: number; cashRefunded: number; netCashFlow: number; costOfGoods: number; estimatedGrossProfit: number; inventoryValue: number; orderCount: number; unitsSold: number; lowStockProducts: number; outOfStockProducts: number; }
+export interface ReportSummary { from: string; to: string; grossSales: number; returnedSales: number; netRevenue: number; cashReceived: number; cashRefunded: number; netCashFlow: number; costOfGoods: number; estimatedGrossProfit: number; inventoryValue: number; orderCount: number; unitsSold: number; lowStockProducts: number; outOfStockProducts: number; otherIncome: number; operatingExpenses: number; supplierPayments: number; otherExpenses: number; estimatedNetProfit: number; }
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {

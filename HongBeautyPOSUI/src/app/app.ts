@@ -42,7 +42,7 @@ export class App implements OnInit {
   email = '';
   password = '';
   serverUrlInput = '';
-  newProduct = { sku: '', name: '', salePrice: 0, costPrice: 0, categoryId: '' };
+  newProduct = { sku: '', barcode: '', name: '', unit: 'cái', reorderLevel: 0, salePrice: 0, costPrice: 0, categoryId: '' };
   editingProductId = '';
   newCategory = { name: '', parentId: '' };
   editingCategoryId = '';
@@ -183,12 +183,12 @@ export class App implements OnInit {
 
   editProduct(product: Product): void {
     this.editingProductId = product.id;
-    this.newProduct = { sku: product.sku, name: product.name, salePrice: product.salePrice, costPrice: product.costPrice, categoryId: product.categoryId ?? '' };
+    this.newProduct = { sku: product.sku, barcode: product.barcode ?? '', name: product.name, unit: product.unit, reorderLevel: product.reorderLevel, salePrice: product.salePrice, costPrice: product.costPrice, categoryId: product.categoryId ?? '' };
   }
 
   cancelProductEdit(): void {
     this.editingProductId = '';
-    this.newProduct = { sku: '', name: '', salePrice: 0, costPrice: 0, categoryId: '' };
+    this.newProduct = { sku: '', barcode: '', name: '', unit: 'cái', reorderLevel: 0, salePrice: 0, costPrice: 0, categoryId: '' };
   }
 
   async saveProduct(): Promise<void> {

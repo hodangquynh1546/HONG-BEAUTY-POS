@@ -87,7 +87,11 @@ try:
     assert off['active'] is False
     _, on = call('PATCH',f"/api/v1/categories/{child['id']}/status",{'active':True})
     assert on['active'] is True
-    _, product = call('POST','/api/v1/products',{'sku':'TEST-' + secrets.token_hex(4),'name':'Test lipstick','salePrice':100,'costPrice':50})
+    barcode = '893' + str(secrets.randbelow(10**10)).zfill(10)
+    _, product = call('POST','/api/v1/products',{'sku':'TEST-' + secrets.token_hex(4),'barcode':barcode,'name':'Test lipstick','unit':'thỏi','reorderLevel':3,'salePrice':100,'costPrice':50})
+    assert product['barcode'] == barcode and product['unit'] == 'thỏi' and product['reorderLevel'] == 3
+    _, barcode_results = call('GET',f'/api/v1/products?q={barcode}')
+    assert len(barcode_results) == 1 and barcode_results[0]['id'] == product['id']
     pid = product['id']
     token = employee_auth['accessToken']
     try:
@@ -96,7 +100,8 @@ try:
     except RuntimeError as error:
         assert 'HTTP 403' in str(error), error
     token = owner_token
-    _, updated = call('PUT',f'/api/v1/products/{pid}',{'sku':product['sku'],'name':'Updated lipstick','salePrice':100,'costPrice':50})
+    _, updated = call('PUT',f'/api/v1/products/{pid}',{'sku':product['sku'],'barcode':barcode,'name':'Updated lipstick','unit':'hộp','reorderLevel':5,'salePrice':100,'costPrice':50})
+    assert updated['barcode'] == barcode and updated['unit'] == 'hộp' and updated['reorderLevel'] == 5
     assert updated['name'] == 'Updated lipstick'
     _, inactive = call('PATCH',f'/api/v1/products/{pid}/status',{'active':False})
     assert inactive['active'] is False

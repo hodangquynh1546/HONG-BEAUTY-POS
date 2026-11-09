@@ -19,14 +19,17 @@ public sealed class ProductCatalog(IProductRepository repository)
 		{
 			throw new ArgumentException("SKU và tên sản phẩm là bắt buộc.");
 		}
-		if (request.SalePrice < 0m || request.CostPrice < 0m)
+		if (request.SalePrice < 0m || request.CostPrice < 0m || request.ReorderLevel < 0m || string.IsNullOrWhiteSpace(request.Unit) || request.Unit.Trim().Length > 40 || request.Barcode?.Trim().Length > 100)
 		{
 			throw new ArgumentOutOfRangeException("request", "Giá không được âm.");
 		}
 		return repository.CreateAsync(new Product
 		{
 			Sku = request.Sku.Trim(),
+			Barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : request.Barcode.Trim(),
 			Name = request.Name.Trim(),
+			Unit = request.Unit.Trim(),
+			ReorderLevel = request.ReorderLevel,
 			CategoryId = request.CategoryId,
 			SalePrice = request.SalePrice,
 			CostPrice = request.CostPrice,

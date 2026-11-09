@@ -182,6 +182,8 @@ protectedApi.MapPost("/products", async (ClaimsPrincipal principal, PosDbContext
         return Results.BadRequest(new { error = "Danh mục không tồn tại" });
     if (!string.IsNullOrWhiteSpace(request.Sku) && await db.Products.AnyAsync(p => p.Sku == request.Sku.Trim(), ct))
         return Results.Conflict(new { error = "SKU đã tồn tại" });
+    if (!string.IsNullOrWhiteSpace(request.Barcode) && await db.Products.AnyAsync(p => p.Barcode == request.Barcode.Trim(), ct))
+        return Results.Conflict(new { error = "Mã vạch đã tồn tại" });
     try { return Results.Created("/api/v1/products", await catalog.CreateAsync(request, ct)); }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
 });
@@ -191,7 +193,7 @@ protectedApi.MapPut("/products/{id:guid}", async (Guid id, ClaimsPrincipal princ
     var sku = request.Sku?.Trim();
     var name = request.Name?.Trim();
     if (string.IsNullOrWhiteSpace(sku) || sku.Length > 100 || string.IsNullOrWhiteSpace(name) || name.Length > 240 ||
-        request.SalePrice < 0 || request.CostPrice < 0)
+        request.SalePrice < 0 || request.CostPrice < 0 || request.ReorderLevel < 0 || string.IsNullOrWhiteSpace(request.Unit) || request.Unit.Trim().Length > 40 || request.Barcode?.Trim().Length > 100)
         return Results.BadRequest(new { error = "Thông tin sản phẩm không hợp lệ" });
     if (request.CategoryId.HasValue && !await db.Categories.AnyAsync(c => c.Id == request.CategoryId && c.Active, ct))
         return Results.BadRequest(new { error = "Danh mục không tồn tại" });
@@ -199,15 +201,21 @@ protectedApi.MapPut("/products/{id:guid}", async (Guid id, ClaimsPrincipal princ
     if (product is null) return Results.NotFound();
     if (await db.Products.AnyAsync(p => p.Sku == sku && p.Id != id, ct))
         return Results.Conflict(new { error = "SKU đã tồn tại" });
+    var barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : request.Barcode.Trim();
+    if (barcode is not null && await db.Products.AnyAsync(p => p.Barcode == barcode && p.Id != id, ct))
+        return Results.Conflict(new { error = "Mã vạch đã tồn tại" });
     product.Sku = sku;
+    product.Barcode = barcode;
     product.Name = name;
+    product.Unit = request.Unit.Trim();
+    product.ReorderLevel = request.ReorderLevel;
     product.SalePrice = request.SalePrice;
     product.CostPrice = request.CostPrice;
     product.CategoryId = request.CategoryId;
     product.UpdatedAt = DateTimeOffset.UtcNow;
     db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "PRODUCT_UPDATED", SubjectId = id });
     await db.SaveChangesAsync(ct);
-    return Results.Ok(new { product.Id, product.Sku, product.Name, product.SalePrice, product.CostPrice, product.CategoryId, product.Active });
+    return Results.Ok(new { product.Id, product.Sku, product.Barcode, product.Name, product.Unit, product.ReorderLevel, product.SalePrice, product.CostPrice, product.CategoryId, product.Active });
 });
 protectedApi.MapPatch("/products/{id:guid}/status", async (Guid id, ClaimsPrincipal principal, PosDbContext db, ActiveStatusRequest request, CancellationToken ct) =>
 {

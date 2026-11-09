@@ -1,6 +1,6 @@
 import { Component, HostListener, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { CurrencyPipe } from '@angular/common';
+import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type AttributeOption, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type CustomerGroup, type Supplier, type CashEntry } from './core/api.service';
 
@@ -9,7 +9,7 @@ type Overlay = 'account' | 'product' | 'customer' | 'permissions' | 'stock' | 'c
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, CurrencyPipe],
+  imports: [FormsModule, CurrencyPipe, DecimalPipe],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
@@ -20,6 +20,7 @@ export class App implements OnInit {
   readonly confirmation = signal<{ title: string; message: string; action: string } | null>(null);
   private resolveConfirmation: ((accepted: boolean) => void) | null = null;
   readonly forgotPasswordInfo = signal(false);
+  readonly imageProcessing = signal(false);
   profileName = '';
   profileAvatarData = '';
   currentPassword = '';
@@ -271,16 +272,25 @@ export class App implements OnInit {
   createProduct(): void { this.cancelProductEdit(); this.openOverlay('product'); }
   createCustomer(): void { this.cancelCustomerEdit(); this.openOverlay('customer'); }
 
+  private requestError(error: unknown, fallback: string): string {
+    const detail = error instanceof HttpErrorResponse ? error.error?.error : null;
+    return typeof detail === 'string' && detail.trim() ? detail : fallback;
+  }
+
   async chooseProductImage(event: Event, target: 'product' | 'customer' | 'profile' | 'employee' = 'product'): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/') || file.size > 10_000_000) { this.error.set('Chọn ảnh dưới 10 MB.'); input.value = ''; return; }
     const url = URL.createObjectURL(file);
+    this.imageProcessing.set(true);
     try {
       const photo = new Image();
-      photo.src = url;
-      await photo.decode();
+      await new Promise<void>((resolve, reject) => {
+        photo.onload = () => resolve();
+        photo.onerror = () => reject(new Error('Không mở được ảnh này. Hãy chọn ảnh JPEG, PNG hoặc WebP.'));
+        photo.src = url;
+      });
       const scale = Math.min(1, 640 / Math.max(photo.naturalWidth, photo.naturalHeight));
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(photo.naturalWidth * scale));
@@ -299,7 +309,7 @@ export class App implements OnInit {
       else this.profileAvatarData = image;
       this.error.set('');
     } catch (error) { this.error.set(error instanceof Error ? error.message : 'Không đọc được ảnh.'); }
-    finally { URL.revokeObjectURL(url); input.value = ''; }
+    finally { URL.revokeObjectURL(url); input.value = ''; this.imageProcessing.set(false); }
   }
 
   async addQuickCategory(): Promise<void> {
@@ -331,12 +341,13 @@ export class App implements OnInit {
   }
 
   async saveProfile(): Promise<void> {
+    if (this.imageProcessing()) { this.error.set('Đợi xử lý ảnh xong rồi lưu tài khoản.'); return; }
     this.loading.set(true); this.error.set(''); this.notice.set('');
     try {
       await this.api.put('/me/profile', { fullName: this.profileName, avatarData: this.profileAvatarData });
       this.api.user.set(await this.api.get<CurrentUser>('/me'));
       this.notice.set('Đã cập nhật tài khoản.');
-    } catch { this.error.set('Không cập nhật được tên. Vui lòng kiểm tra lại.'); }
+    } catch (error) { this.error.set(this.requestError(error, 'Không cập nhật được tài khoản. Vui lòng kiểm tra lại.')); }
     finally { this.loading.set(false); }
   }
 
@@ -519,6 +530,7 @@ export class App implements OnInit {
   }
 
   async saveProduct(): Promise<void> {
+    if (this.imageProcessing()) { this.error.set('Đợi xử lý ảnh xong rồi lưu sản phẩm.'); return; }
     this.loading.set(true); this.error.set('');
     try {
       const payload = { ...this.newProduct, categoryId: this.newProduct.categoryId || null,
@@ -529,7 +541,7 @@ export class App implements OnInit {
       this.cancelProductEdit();
       this.overlay.set(null);
       await this.refresh();
-    } catch { this.error.set('Không lưu được sản phẩm. Kiểm tra SKU, danh mục và giá trị nhập.'); }
+    } catch (error) { this.error.set(this.requestError(error, 'Không lưu được sản phẩm. Kiểm tra SKU, danh mục và giá trị nhập.')); }
     finally { this.loading.set(false); }
   }
 
@@ -606,6 +618,7 @@ export class App implements OnInit {
   }
 
   async saveCustomer(): Promise<void> {
+    if (this.imageProcessing()) { this.error.set('Đợi xử lý ảnh xong rồi lưu khách hàng.'); return; }
     this.loading.set(true); this.error.set('');
     try {
       if (this.editingCustomerId) await this.api.put(`/customers/${this.editingCustomerId}`, { ...this.newCustomer, groupId: this.newCustomer.groupId || null, gender: this.newCustomer.gender || null });
@@ -614,7 +627,7 @@ export class App implements OnInit {
       this.cancelCustomerEdit();
       this.overlay.set(null);
       await this.refresh();
-    } catch { this.error.set('Không lưu được khách hàng. Kiểm tra thông tin nhập.'); }
+    } catch (error) { this.error.set(this.requestError(error, 'Không lưu được khách hàng. Kiểm tra thông tin nhập.')); }
     finally { this.loading.set(false); }
   }
 
@@ -664,13 +677,14 @@ export class App implements OnInit {
   }
 
   async addEmployee(): Promise<void> {
+    if (this.imageProcessing()) { this.error.set('Đợi xử lý ảnh xong rồi tạo nhân viên.'); return; }
     this.loading.set(true); this.error.set('');
     try {
       await this.api.post('/employees', { ...this.newEmployee, permissions: ['products.read'] });
       this.newEmployee = { email: '', fullName: '', password: '', avatarData: '' };
       this.notice.set('Đã tạo nhân viên');
       await this.refresh();
-    } catch { this.error.set('Không tạo được nhân viên. Kiểm tra thông tin và email trùng.'); }
+    } catch (error) { this.error.set(this.requestError(error, 'Không tạo được nhân viên. Kiểm tra thông tin và email trùng.')); }
     finally { this.loading.set(false); }
   }
 

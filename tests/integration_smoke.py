@@ -221,7 +221,33 @@ try:
     assert len(cash_entries) == 1 and cash_entries[0]['creatorName'] == 'Test Owner'
     _, report_after_cash = call('GET','/api/v1/reports/summary')
     assert report_after_cash['netRevenue'] == 100 and report_after_cash['otherIncome'] == 25 and report_after_cash['netCashFlow'] == 125
+    _, profile = call('PUT','/api/v1/me/profile',{'fullName':'Updated Owner'})
+    assert profile['fullName'] == 'Updated Owner'
+    _, current_user = call('GET','/api/v1/me')
+    assert current_user['fullName'] == 'Updated Owner'
+    changed_password = 'D8!' + secrets.token_urlsafe(20)
+    call('PUT','/api/v1/me/password',{'currentPassword':env['OWNER_PASSWORD'],'newPassword':changed_password})
+    try:
+        call('GET','/api/v1/me')
+        raise AssertionError('Old owner session survived password change')
+    except RuntimeError as error:
+        assert 'HTTP 401' in str(error), error
+    recovered_password = 'E9!' + secrets.token_urlsafe(20)
+    recover_env = dict(env, OWNER_PASSWORD=recovered_password)
+    recovered = subprocess.run([os.environ.get('DOTNET_COMMAND', 'dotnet'),'run','--project',str(api),'--no-build','--no-launch-profile','--','--recover-owner-password'],env=recover_env,cwd=root,capture_output=True,text=True,timeout=40)
+    assert recovered.returncode == 0, recovered.stderr[-1000:]
+    try:
+        call('GET','/api/v1/me')
+        raise AssertionError('Old owner session survived password recovery')
+    except RuntimeError as error:
+        assert 'HTTP 401' in str(error), error
+    token = None
+    _, recovered_auth = call('POST','/api/v1/auth/login',{'email':env['OWNER_EMAIL'],'password':recovered_password})
+    token = recovered_auth['accessToken']
+    _, audit = call('GET','/api/v1/audit-events')
+    assert any(event['action']=='OWNER_PASSWORD_RECOVERED' for event in audit)
     print('PASS: report balances')
+    print('PASS: self profile, password change, and owner recovery')
     print('PASS: employee permission and deactivation checks')
     print('PASS: migrate, bootstrap, login, product, supplier, purchase, sale, payment, return, stocktake')
 finally:

@@ -136,6 +136,26 @@ if (args.Contains("--bootstrap-owner", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--recover-owner-password", StringComparer.Ordinal))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<PosDbContext>();
+    var email = Environment.GetEnvironmentVariable("OWNER_EMAIL")?.Trim().ToLowerInvariant();
+    var password = Environment.GetEnvironmentVariable("OWNER_PASSWORD");
+    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password) || password.StartsWith("CHANGE_ME", StringComparison.OrdinalIgnoreCase) ||
+        password.Length < 14 || password.Length > 128 || !password.Any(char.IsUpper) || !password.Any(char.IsLower) ||
+        !password.Any(char.IsDigit) || password.All(char.IsLetterOrDigit))
+        throw new InvalidOperationException("OWNER_EMAIL and a strong OWNER_PASSWORD are required for recovery");
+    var owner = await db.Users.SingleOrDefaultAsync(u => u.Role == UserRole.Owner && u.Email == email);
+    if (owner is null) throw new InvalidOperationException("Owner account matching OWNER_EMAIL was not found");
+    if (BCrypt.Net.BCrypt.Verify(password, owner.PasswordHash)) throw new InvalidOperationException("New password must differ from the current password");
+    owner.PasswordHash = BCrypt.Net.BCrypt.HashPassword(password);
+    db.AuditEvents.Add(new AuditEvent { ActorId = owner.Id, Action = "OWNER_PASSWORD_RECOVERED", SubjectId = owner.Id });
+    await db.SaveChangesAsync();
+    Console.WriteLine("Owner password recovered; previous sessions are invalid");
+    return;
+}
+
 if (string.Equals(Environment.GetEnvironmentVariable("RUN_MIGRATIONS_ON_START"), "true", StringComparison.OrdinalIgnoreCase))
 {
     using var scope = app.Services.CreateScope();
@@ -187,6 +207,35 @@ protectedApi.MapGet("/me", async (ClaimsPrincipal principal, PosDbContext db) =>
     var permissions = user.Role == UserRole.Owner ? Array.Empty<string>() :
         await db.EmployeePermissions.Where(p => p.UserId == id).Select(p => p.Permission).ToArrayAsync();
     return Results.Ok(new { user.Id, user.Email, user.FullName, Role = user.Role.ToString(), Permissions = permissions });
+});
+protectedApi.MapPut("/me/profile", async (ClaimsPrincipal principal, PosDbContext db, UpdateProfileRequest request, CancellationToken ct) =>
+{
+    if (!Guid.TryParse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub), out var id)) return Results.Unauthorized();
+    var name = request.FullName?.Trim();
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 200) return Results.BadRequest(new { error = "Tên phải có từ 1 đến 200 ký tự" });
+    var user = await db.Users.SingleOrDefaultAsync(u => u.Id == id && u.Active, ct);
+    if (user is null) return Results.Unauthorized();
+    user.FullName = name;
+    db.AuditEvents.Add(new AuditEvent { ActorId = id, Action = "PROFILE_UPDATED", SubjectId = id });
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(new { user.Id, user.Email, user.FullName, Role = user.Role.ToString() });
+});
+protectedApi.MapPut("/me/password", async (ClaimsPrincipal principal, PosDbContext db, ChangePasswordRequest request, CancellationToken ct) =>
+{
+    if (!Guid.TryParse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub), out var id)) return Results.Unauthorized();
+    var user = await db.Users.SingleOrDefaultAsync(u => u.Id == id && u.Active, ct);
+    if (user is null) return Results.Unauthorized();
+    if (string.IsNullOrEmpty(request.CurrentPassword) || !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        return Results.BadRequest(new { error = "Mật khẩu hiện tại không đúng" });
+    var password = request.NewPassword;
+    if (string.IsNullOrEmpty(password) || password.Length < 14 || password.Length > 128 ||
+        !password.Any(char.IsUpper) || !password.Any(char.IsLower) || !password.Any(char.IsDigit) || password.All(char.IsLetterOrDigit))
+        return Results.BadRequest(new { error = "Mật khẩu mới phải dài 14–128 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt" });
+    if (BCrypt.Net.BCrypt.Verify(password, user.PasswordHash)) return Results.BadRequest(new { error = "Mật khẩu mới phải khác mật khẩu cũ" });
+    user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(password);
+    db.AuditEvents.Add(new AuditEvent { ActorId = id, Action = "PASSWORD_CHANGED", SubjectId = id });
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
 });
 protectedApi.MapGet("/products", async (ClaimsPrincipal principal, PosDbContext db, ProductCatalog catalog, string? q, CancellationToken ct) =>
 {
@@ -890,6 +939,8 @@ static async Task<bool> IsOwner(ClaimsPrincipal principal, PosDbContext db, Canc
 }
 
 sealed record LoginRequest(string Email, string Password);
+sealed record UpdateProfileRequest(string FullName);
+sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 sealed record CreateEmployeeRequest(string Email, string FullName, string Password, string[]? Permissions);
 sealed record ReplacePermissionsRequest(string[]? Permissions);
 sealed record SetEmployeeStatusRequest(bool Active);

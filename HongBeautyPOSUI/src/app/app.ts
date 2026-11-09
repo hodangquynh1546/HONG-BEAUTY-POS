@@ -2,9 +2,9 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApiService, type Employee, type AuditEvent, type Product, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
+import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
 
-type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit';
+type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit' | 'account';
 
 @Component({
   selector: 'app-root',
@@ -14,6 +14,12 @@ type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' |
 })
 export class App implements OnInit {
   readonly page = signal<Page>('overview');
+  readonly sidebarCollapsed = signal(localStorage.getItem('mieu_sidebar_collapsed') === 'true');
+  readonly forgotPasswordInfo = signal(false);
+  profileName = '';
+  currentPassword = '';
+  newPassword = '';
+  confirmPassword = '';
   readonly products = signal<Product[]>([]);
   readonly posProducts = signal<Product[]>([]);
   readonly categories = signal<Category[]>([]);
@@ -104,8 +110,36 @@ export class App implements OnInit {
   async ngOnInit(): Promise<void> {
     this.serverUrlInput = this.api.serverUrl();
     await this.api.restore();
+    this.profileName = this.api.user()?.fullName ?? '';
     if (this.api.user()) await this.refresh();
     if (!this.pendingOrderId) this.paymentAmount = this.cartTotal();
+  }
+
+  toggleSidebar(): void {
+    this.sidebarCollapsed.update(value => !value);
+    localStorage.setItem('mieu_sidebar_collapsed', String(this.sidebarCollapsed()));
+  }
+
+  async saveProfile(): Promise<void> {
+    this.loading.set(true); this.error.set(''); this.notice.set('');
+    try {
+      await this.api.put('/me/profile', { fullName: this.profileName });
+      this.api.user.set(await this.api.get<CurrentUser>('/me'));
+      this.notice.set('Đã cập nhật tên tài khoản.');
+    } catch { this.error.set('Không cập nhật được tên. Vui lòng kiểm tra lại.'); }
+    finally { this.loading.set(false); }
+  }
+
+  async changeOwnPassword(): Promise<void> {
+    if (this.newPassword !== this.confirmPassword) { this.error.set('Mật khẩu xác nhận không khớp.'); return; }
+    this.loading.set(true); this.error.set(''); this.notice.set('');
+    try {
+      await this.api.put('/me/password', { currentPassword: this.currentPassword, newPassword: this.newPassword });
+      this.currentPassword = ''; this.newPassword = ''; this.confirmPassword = '';
+      this.api.logout();
+      this.notice.set('Đã đổi mật khẩu. Vui lòng đăng nhập lại.');
+    } catch { this.error.set('Không đổi được mật khẩu. Kiểm tra mật khẩu hiện tại và dùng mật khẩu mới 14–128 ký tự gồm chữ hoa, chữ thường, số, ký tự đặc biệt.'); }
+    finally { this.loading.set(false); }
   }
 
   private async loadCustomers(reset: boolean): Promise<void> {
@@ -185,7 +219,7 @@ export class App implements OnInit {
     this.loading.set(true); this.error.set('');
     try {
       if (this.api.isNative) this.api.setServerUrl(this.serverUrlInput);
-      await this.api.login(this.email, this.password); this.password = ''; await this.refresh();
+      await this.api.login(this.email, this.password); this.password = ''; this.notice.set(''); this.profileName = this.api.user()?.fullName ?? ''; await this.refresh();
     }
     catch (error) { this.error.set(error instanceof Error && (error.message.includes('máy chủ') || error.message.includes('HTTPS')) ? error.message : 'Không đăng nhập được. Kiểm tra máy chủ, kết nối và tài khoản.'); }
     finally { this.loading.set(false); }
@@ -656,7 +690,9 @@ export class App implements OnInit {
       CATEGORY_UPDATED: 'Sửa danh mục', CATEGORY_ACTIVATED: 'Mở danh mục', CATEGORY_DEACTIVATED: 'Ngừng danh mục',
       CUSTOMER_UPDATED: 'Sửa khách hàng', CUSTOMER_ACTIVATED: 'Mở khách hàng', CUSTOMER_DEACTIVATED: 'Ngừng khách hàng',
       SUPPLIER_UPDATED: 'Sửa nhà cung cấp', SUPPLIER_ACTIVATED: 'Mở nhà cung cấp', SUPPLIER_DEACTIVATED: 'Ngừng nhà cung cấp',
-      SALE_RETURN_CREATED: 'Tạo phiếu trả hàng', CASH_ENTRY_CREATED: 'Ghi phiếu thu chi'
+      SALE_RETURN_CREATED: 'Tạo phiếu trả hàng', CASH_ENTRY_CREATED: 'Ghi phiếu thu chi',
+      PROFILE_UPDATED: 'Đổi tên tài khoản', PASSWORD_CHANGED: 'Đổi mật khẩu',
+      OWNER_PASSWORD_RECOVERED: 'Khôi phục mật khẩu Chủ sở hữu'
     };
     return labels[action] ?? 'Thao tác hệ thống';
   }

@@ -1,43 +1,46 @@
 @if (!api.user()) {
   <main class="login-page">
     <section class="login-card">
-      <div class="mark">M</div>
-      <p class="eyebrow">MIÊU</p>
-      <h1>Chào mừng trở lại</h1>
-      <p class="muted">Quản lý kinh doanh trong một không gian làm việc.</p>
+      <div class="login-avatar"><div class="mark">M</div></div>
+      <h1>Miêu chào mừng bạn trở lại</h1>
       <form (ngSubmit)="login()">
         @if (api.isNative) { <label>Địa chỉ máy chủ HTTPS<input type="url" name="serverUrl" [(ngModel)]="serverUrlInput" placeholder="https://pos.congty-cua-ban.com" required autocomplete="url"></label> }
         <label>Email<input type="email" name="email" [(ngModel)]="email" required autocomplete="username"></label>
         <label>Mật khẩu<input type="password" name="password" [(ngModel)]="password" required autocomplete="current-password"></label>
         @if (error()) { <p class="error">{{ error() }}</p> }
+        @if (notice()) { <p class="alert success">{{ notice() }}</p> }
         <button class="primary" [disabled]="loading()">{{ loading() ? 'Đang đăng nhập...' : 'Đăng nhập' }}</button>
       </form>
+      <button type="button" class="text-action" (click)="forgotPasswordInfo.set(!forgotPasswordInfo())">Quên mật khẩu?</button>
+      @if (forgotPasswordInfo()) { <p class="hint">Nhân viên: liên hệ Chủ sở hữu để đặt lại mật khẩu. Chủ sở hữu: dùng quy trình khôi phục an toàn trong hướng dẫn triển khai; không cấp lại mật khẩu qua trang đăng nhập.</p> }
     </section>
   </main>
 } @else {
-  <div class="shell">
-    <aside class="sidebar">
+  <div class="shell" [class.sidebar-is-collapsed]="sidebarCollapsed()">
+    <aside class="sidebar" aria-label="Điều hướng chính">
       <div class="brand"><div class="mark">M</div><div><strong>Miêu</strong><small>QUẢN LÝ BÁN HÀNG</small></div></div>
+      <button class="sidebar-toggle" type="button" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed() ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'" [attr.title]="sidebarCollapsed() ? 'Mở rộng' : 'Thu gọn'"><span class="material-symbols-outlined">{{ sidebarCollapsed() ? 'left_panel_open' : 'left_panel_close' }}</span><span class="nav-label">{{ sidebarCollapsed() ? 'Mở rộng' : 'Thu gọn' }}</span></button>
       <nav>
-        <button [class.active]="page() === 'overview'" (click)="page.set('overview')">Tổng quan</button>
-        @if (api.can('products.read')) { <button [class.active]="page() === 'products'" (click)="page.set('products')">Sản phẩm</button> }
-        @if (api.can('products.read')) { <button [class.active]="page() === 'categories'" (click)="page.set('categories')">Danh mục</button> }
-        @if (api.can('customers.read')) { <button [class.active]="page() === 'customers'" (click)="page.set('customers')">Khách hàng</button> }
-        @if (api.can('suppliers.read')) { <button [class.active]="page() === 'suppliers'" (click)="page.set('suppliers')">Nhà cung cấp</button> }
-        @if (api.can('inventory.read')) { <button [class.active]="page() === 'stock'" (click)="page.set('stock')">Tồn kho</button> }
-        @if (api.can('inventory.read')) { <button [class.active]="page() === 'stocktakes'" (click)="page.set('stocktakes')">Kiểm kho</button> }
-        @if (api.can('purchases.read')) { <button [class.active]="page() === 'purchases'" (click)="page.set('purchases')">Nhập hàng</button> }
-        @if (api.can('sales.write')) { <button [class.active]="page() === 'pos'" (click)="page.set('pos')">Bán hàng</button> }
-        @if (api.can('sales.read')) { <button [class.active]="page() === 'orders'" (click)="page.set('orders')">Đơn hàng</button> }
-        @if (api.can('cash.read') || api.can('cash.write')) { <button [class.active]="page() === 'cash'" (click)="page.set('cash')">Thu chi</button> }
-        @if (api.can('reports.read')) { <button [class.active]="page() === 'reports'" (click)="page.set('reports')">Báo cáo</button> }
-        @if (api.user()?.role === 'Owner') { <button [class.active]="page() === 'employees'" (click)="page.set('employees')">Nhân viên</button> }
-        @if (api.user()?.role === 'Owner') { <button [class.active]="page() === 'audit'" (click)="page.set('audit')">Nhật ký</button> }
+        <button title="Tổng quan" [class.active]="page() === 'overview'" (click)="page.set('overview')"><span class="material-symbols-outlined">dashboard</span><span class="nav-label">Tổng quan</span></button>
+        @if (api.can('products.read')) { <button title="Sản phẩm" [class.active]="page() === 'products'" (click)="page.set('products')"><span class="material-symbols-outlined">inventory_2</span><span class="nav-label">Sản phẩm</span></button> }
+        @if (api.can('products.read')) { <button title="Danh mục" [class.active]="page() === 'categories'" (click)="page.set('categories')"><span class="material-symbols-outlined">category</span><span class="nav-label">Danh mục</span></button> }
+        @if (api.can('customers.read')) { <button title="Khách hàng" [class.active]="page() === 'customers'" (click)="page.set('customers')"><span class="material-symbols-outlined">groups</span><span class="nav-label">Khách hàng</span></button> }
+        @if (api.can('suppliers.read')) { <button title="Nhà cung cấp" [class.active]="page() === 'suppliers'" (click)="page.set('suppliers')"><span class="material-symbols-outlined">local_shipping</span><span class="nav-label">Nhà cung cấp</span></button> }
+        @if (api.can('inventory.read')) { <button title="Tồn kho" [class.active]="page() === 'stock'" (click)="page.set('stock')"><span class="material-symbols-outlined">warehouse</span><span class="nav-label">Tồn kho</span></button> }
+        @if (api.can('inventory.read')) { <button title="Kiểm kho" [class.active]="page() === 'stocktakes'" (click)="page.set('stocktakes')"><span class="material-symbols-outlined">fact_check</span><span class="nav-label">Kiểm kho</span></button> }
+        @if (api.can('purchases.read')) { <button title="Nhập hàng" [class.active]="page() === 'purchases'" (click)="page.set('purchases')"><span class="material-symbols-outlined">input</span><span class="nav-label">Nhập hàng</span></button> }
+        @if (api.can('sales.write')) { <button title="Bán hàng" [class.active]="page() === 'pos'" (click)="page.set('pos')"><span class="material-symbols-outlined">point_of_sale</span><span class="nav-label">Bán hàng</span></button> }
+        @if (api.can('sales.read')) { <button title="Đơn hàng" [class.active]="page() === 'orders'" (click)="page.set('orders')"><span class="material-symbols-outlined">receipt_long</span><span class="nav-label">Đơn hàng</span></button> }
+        @if (api.can('cash.read') || api.can('cash.write')) { <button title="Thu chi" [class.active]="page() === 'cash'" (click)="page.set('cash')"><span class="material-symbols-outlined">payments</span><span class="nav-label">Thu chi</span></button> }
+        @if (api.can('reports.read')) { <button title="Báo cáo" [class.active]="page() === 'reports'" (click)="page.set('reports')"><span class="material-symbols-outlined">monitoring</span><span class="nav-label">Báo cáo</span></button> }
+        @if (api.user()?.role === 'Owner') { <button title="Nhân viên" [class.active]="page() === 'employees'" (click)="page.set('employees')"><span class="material-symbols-outlined">badge</span><span class="nav-label">Nhân viên</span></button> }
+        @if (api.user()?.role === 'Owner') { <button title="Nhật ký" [class.active]="page() === 'audit'" (click)="page.set('audit')"><span class="material-symbols-outlined">history</span><span class="nav-label">Nhật ký</span></button> }
+        <button title="Tài khoản" [class.active]="page() === 'account'" (click)="page.set('account')"><span class="material-symbols-outlined">account_circle</span><span class="nav-label">Tài khoản</span></button>
       </nav>
-      <div class="account"><span class="avatar">{{ api.user()?.fullName?.slice(0, 1) }}</span><div><b>{{ api.user()?.fullName }}</b><small>{{ api.user()?.role === 'Owner' ? 'Chủ cửa hàng' : 'Nhân viên' }}</small></div><button class="logout" (click)="api.logout()" title="Đăng xuất">↪</button></div>
+      <div class="account"><span class="avatar">{{ api.user()?.fullName?.slice(0, 1) }}</span><div class="account-details"><b>{{ api.user()?.fullName }}</b><small>{{ api.user()?.role === 'Owner' ? 'Chủ cửa hàng' : 'Nhân viên' }}</small></div><button class="logout" (click)="api.logout()" title="Đăng xuất" aria-label="Đăng xuất"><span class="material-symbols-outlined">logout</span></button></div>
     </aside>
     <main class="content">
-      <header><div><p class="eyebrow">MIÊU / QUẢN LÝ</p><h1>{{ page() === 'overview' ? 'Tổng quan' : page() === 'products' ? 'Sản phẩm' : page() === 'categories' ? 'Danh mục' : page() === 'customers' ? 'Khách hàng' : page() === 'suppliers' ? 'Nhà cung cấp' : page() === 'stock' ? 'Tồn kho' : page() === 'stocktakes' ? 'Kiểm kho' : page() === 'purchases' ? 'Nhập hàng' : page() === 'pos' ? 'Bán hàng' : page() === 'orders' ? 'Đơn hàng' : page() === 'cash' ? 'Thu chi' : page() === 'reports' ? 'Báo cáo' : page() === 'audit' ? 'Nhật ký' : 'Nhân viên' }}</h1></div><button class="refresh" (click)="refresh()" [disabled]="loading()">Làm mới</button></header>
+      <header><div><p class="eyebrow">MIÊU / QUẢN LÝ</p><h1>{{ page() === 'overview' ? 'Tổng quan' : page() === 'products' ? 'Sản phẩm' : page() === 'categories' ? 'Danh mục' : page() === 'customers' ? 'Khách hàng' : page() === 'suppliers' ? 'Nhà cung cấp' : page() === 'stock' ? 'Tồn kho' : page() === 'stocktakes' ? 'Kiểm kho' : page() === 'purchases' ? 'Nhập hàng' : page() === 'pos' ? 'Bán hàng' : page() === 'orders' ? 'Đơn hàng' : page() === 'cash' ? 'Thu chi' : page() === 'reports' ? 'Báo cáo' : page() === 'audit' ? 'Nhật ký' : page() === 'account' ? 'Tài khoản' : 'Nhân viên' }}</h1></div><button class="refresh icon-button" (click)="refresh()" [disabled]="loading()" title="Làm mới" aria-label="Làm mới"><span class="material-symbols-outlined">refresh</span></button></header>
       @if (error()) { <div class="alert error">{{ error() }}</div> }
       @if (notice()) { <div class="alert success">{{ notice() }}</div> }
       @if (loading()) { <p class="muted">Đang tải dữ liệu...</p> }
@@ -45,6 +48,9 @@
         <section class="hero"><div><p class="eyebrow">KHÔNG GIAN LÀM VIỆC</p><h2>Xin chào, {{ api.user()?.fullName }}</h2><p>Dữ liệu hiển thị theo quyền truy cập và giao dịch thực tế.</p></div><div class="hero-symbol">✦</div></section>
         @if (report(); as summary) { <div class="stat-grid"><div class="stat"><span>Doanh thu thuần hôm nay</span><strong>{{ summary.netRevenue | currency:'VND':'symbol':'1.0-0' }}</strong></div><div class="stat"><span>Tiền thực nhận hôm nay</span><strong>{{ summary.netCashFlow | currency:'VND':'symbol':'1.0-0' }}</strong></div><div class="stat"><span>Đơn hàng hôm nay</span><strong>{{ summary.orderCount }}</strong></div><div class="stat"><span>Giá trị tồn ước tính</span><strong>{{ summary.inventoryValue | currency:'VND':'symbol':'1.0-0' }}</strong></div></div> }
         @else { <div class="empty">Chưa có báo cáo hoặc tài khoản chưa được cấp quyền xem báo cáo.</div> }
+      }
+      @if (page() === 'account') {
+        <div class="columns"><section class="panel form-panel"><h2>Thông tin tài khoản</h2><p class="hint">{{ api.user()?.email }} · {{ api.user()?.role === 'Owner' ? 'Chủ sở hữu' : 'Nhân viên' }}</p><form (ngSubmit)="saveProfile()"><label>Tên hiển thị<input name="profileName" [(ngModel)]="profileName" maxlength="200" required></label><button class="primary" [disabled]="loading()">Lưu tên</button></form></section><section class="panel form-panel"><h2>Đổi mật khẩu</h2><form (ngSubmit)="changeOwnPassword()"><label>Mật khẩu hiện tại<input type="password" name="currentPassword" [(ngModel)]="currentPassword" autocomplete="current-password" required></label><label>Mật khẩu mới<input type="password" name="newPassword" [(ngModel)]="newPassword" minlength="14" maxlength="128" autocomplete="new-password" required></label><label>Xác nhận mật khẩu mới<input type="password" name="confirmPassword" [(ngModel)]="confirmPassword" autocomplete="new-password" required></label><p class="hint">Tối thiểu 14 ký tự gồm chữ hoa, chữ thường, số và ký tự đặc biệt. Sau khi đổi, đăng nhập lại trên mọi thiết bị.</p><button class="primary" [disabled]="loading()">Đổi mật khẩu</button></form></section></div>
       }
       @if (page() === 'products') {
         <div class="columns"><section class="panel grow"><h2>Danh sách sản phẩm</h2>

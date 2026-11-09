@@ -14,3 +14,19 @@
   #receipt-print-area .receipt-actions { display: none !important; }
   #receipt-print-area .table-wrap { overflow: visible; }
 }
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-weight:normal;font-style:normal;font-size:23px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-feature-settings:'liga';font-feature-settings:'liga';-webkit-font-smoothing:antialiased}
+.shell .sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;transition:width .18s ease}
+.sidebar nav button,.sidebar-toggle{display:flex;align-items:center;gap:12px;width:100%}
+.sidebar-toggle{background:none;border:0;color:#e5cdd5;padding:10px 26px 18px;text-align:left;font-weight:600}
+.sidebar-is-collapsed .sidebar{width:76px}
+.sidebar-is-collapsed .sidebar .nav-label,.sidebar-is-collapsed .sidebar .brand>div:last-child,.sidebar-is-collapsed .sidebar .account-details{display:none}
+.sidebar-is-collapsed .sidebar nav button{justify-content:center;padding:13px}
+.sidebar-is-collapsed .sidebar-toggle{justify-content:center;padding:10px 0 18px}
+.sidebar-is-collapsed .sidebar .brand{justify-content:center;padding-left:0;padding-right:0}
+.sidebar-is-collapsed .sidebar .account{padding:14px 8px;flex-wrap:wrap;justify-content:center}
+.sidebar-is-collapsed .sidebar .logout{margin:0}
+.icon-button{display:inline-flex;align-items:center;justify-content:center;width:43px;height:43px;padding:0}
+.login-avatar{display:flex;justify-content:center}.login-avatar .mark{width:72px;height:72px;border-radius:18px;font-size:2.1rem;margin:0}
+.login-card{text-align:center}.login-card form{text-align:left}.login-card h1{font-size:1.85rem;margin:18px 0 6px}
+.text-action{display:block;margin:17px auto 0;border:0;background:transparent;color:#62293e;text-decoration:underline}
+@media(max-width:650px){.shell .sidebar{position:sticky;top:0;height:auto;max-height:none;z-index:5;overflow:visible}.sidebar nav{overflow:auto}.sidebar nav button{width:auto}.sidebar-toggle{position:absolute;right:8px;top:13px;width:auto;padding:8px}.sidebar-is-collapsed .sidebar{width:100%}.sidebar-is-collapsed .sidebar nav button{min-width:46px}.sidebar-is-collapsed .sidebar .account{display:none}.sidebar-is-collapsed .sidebar .brand{justify-content:flex-start;padding:13px 16px}.sidebar-is-collapsed .sidebar .nav-label{display:none}}

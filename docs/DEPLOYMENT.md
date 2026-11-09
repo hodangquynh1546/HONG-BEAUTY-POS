@@ -11,6 +11,11 @@
 
 `BOOTSTRAP_OWNER_ON_START=true` chỉ tạo Chủ sở hữu khi database chưa có ai giữ vai trò đó. Nếu chưa nhập đủ ba biến `OWNER_*`, dịch vụ vẫn khởi động nhưng chưa có tài khoản để đăng nhập; nhập các biến rồi triển khai lại. Sau khi đăng nhập thành công, có thể bỏ `OWNER_PASSWORD` khỏi môi trường và đặt `BOOTSTRAP_OWNER_ON_START=false`; lần khởi động sau sẽ không cần mật khẩu ban đầu. Không dùng cùng database cho test và production.
 
+## Quên mật khẩu
+
+- Nhân viên liên hệ Chủ sở hữu. Chủ sở hữu vào **Nhân viên → Phân quyền → Đặt lại mật khẩu**; mật khẩu cũ và phiên đăng nhập cũ hết hiệu lực ngay.
+- Chủ sở hữu dùng quy trình khôi phục có quyền vận hành máy chủ: sao lưu database, đặt tạm `DATABASE_URL`, `JWT_SECRET`, `OWNER_EMAIL` đúng email đang có và `OWNER_PASSWORD` mới đủ mạnh trong môi trường riêng, rồi chạy ứng dụng với đối số `--recover-owner-password`. Lệnh chỉ đổi mật khẩu cho đúng Chủ sở hữu hiện hữu, ghi nhật ký và làm vô hiệu phiên cũ; không tạo Chủ sở hữu mới. Xóa `OWNER_PASSWORD` khỏi môi trường sau khi khôi phục. Không dùng đối số này làm lệnh khởi động web thường xuyên; không nhập mật khẩu vào trang đăng nhập công khai khi yêu cầu khôi phục.
+
 ## Xác minh sau triển khai
 
 1. Đợi Render báo dịch vụ khỏe. `/health` chỉ trả 200 khi database kết nối được và không còn migration chờ áp dụng.

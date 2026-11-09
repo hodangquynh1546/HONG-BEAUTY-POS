@@ -17,4 +17,4 @@
 2. Mở trang đăng nhập, đăng nhập bằng tài khoản Chủ sở hữu vừa tạo, rồi thử đọc danh mục và kho.
 3. Sao lưu database trước mỗi thay đổi schema; kiểm tra khả năng khôi phục trên một database riêng.
 
-Chưa có kết quả kiểm thử Docker, Render hoặc Neon thực tế cho bản khôi phục này. Không dùng dữ liệu kinh doanh thật trước khi các bước trên được kiểm chứng.
+Đã thử migration, khởi tạo Chủ sở hữu, `/health` và đăng nhập trên PostgreSQL cục bộ. Chưa có kết quả kiểm thử Docker, Render hoặc Neon thực tế cho bản khôi phục này. Không dùng dữ liệu kinh doanh thật trước khi các bước trên được kiểm chứng.

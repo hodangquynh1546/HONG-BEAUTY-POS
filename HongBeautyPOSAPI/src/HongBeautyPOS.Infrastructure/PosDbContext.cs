@@ -347,6 +347,7 @@ public sealed class PosDbContext : DbContext
 			e.ToTable("audit_events");
 			e.HasKey((AuditEvent x) => x.Id);
 			e.Property((AuditEvent x) => x.Action).HasMaxLength(100);
+			e.Property((AuditEvent x) => x.DetailsJson).HasColumnType("text");
 			e.HasOne<User>().WithMany().HasForeignKey((AuditEvent x) => x.ActorId)
 				.OnDelete(DeleteBehavior.Restrict);
 			e.HasIndex((AuditEvent x) => x.CreatedAt);

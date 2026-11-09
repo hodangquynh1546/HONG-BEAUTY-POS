@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using HongBeautyPOS.Application;
@@ -287,7 +288,13 @@ protectedApi.MapPost("/products", async (ClaimsPrincipal principal, PosDbContext
     var optionIds = request.AttributeOptionIds?.Distinct().ToArray() ?? [];
     if (optionIds.Length > 40 || await db.AttributeOptions.CountAsync(x => optionIds.Contains(x.Id), ct) != optionIds.Length)
         return Results.BadRequest(new { error = "Thuộc tính sản phẩm không hợp lệ" });
-    try { return Results.Created("/api/v1/products", await catalog.CreateAsync(request, ct)); }
+    try {
+        var product = await catalog.CreateAsync(request, ct);
+        db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "PRODUCT_CREATED", SubjectId = product.Id,
+            DetailsJson = JsonSerializer.Serialize(new { product.Sku, product.Name, product.Barcode, product.Unit, product.SalePrice, product.CostPrice, product.ReorderLevel, product.CategoryId, hasImage = product.ImageData is not null, attributes = product.Attributes?.Select(a => $"{a.Name}: {a.Value}").ToArray() }) });
+        await db.SaveChangesAsync(ct);
+        return Results.Created("/api/v1/products", product);
+    }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
 });
 protectedApi.MapPut("/products/{id:guid}", async (Guid id, ClaimsPrincipal principal, PosDbContext db, CreateProductRequest request, CancellationToken ct) =>
@@ -313,6 +320,7 @@ protectedApi.MapPut("/products/{id:guid}", async (Guid id, ClaimsPrincipal princ
     var optionIds = request.AttributeOptionIds?.Distinct().ToArray() ?? [];
     if (optionIds.Length > 40 || await db.AttributeOptions.CountAsync(x => optionIds.Contains(x.Id), ct) != optionIds.Length)
         return Results.BadRequest(new { error = "Thuộc tính sản phẩm không hợp lệ" });
+    var oldProduct = new { product.Sku, product.Name, product.Barcode, product.Unit, product.SalePrice, product.CostPrice, product.ReorderLevel, product.CategoryId };
     product.Sku = sku;
     product.Barcode = barcode;
     product.ImageData = imageData;
@@ -328,7 +336,7 @@ protectedApi.MapPut("/products/{id:guid}", async (Guid id, ClaimsPrincipal princ
     db.ProductAttributeSelections.AddRange(optionIds.Where(x => !oldIds.Contains(x))
         .Select(x => new ProductAttributeSelection { ProductId = id, OptionId = x }));
     product.UpdatedAt = DateTimeOffset.UtcNow;
-    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "PRODUCT_UPDATED", SubjectId = id });
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "PRODUCT_UPDATED", SubjectId = id, DetailsJson = JsonSerializer.Serialize(new { before = oldProduct, after = new { product.Sku, product.Name, product.Barcode, product.Unit, product.SalePrice, product.CostPrice, product.ReorderLevel, product.CategoryId } }) });
     await db.SaveChangesAsync(ct);
     return Results.Ok(new { product.Id, product.Sku, product.Barcode, product.Name, product.Unit, product.ReorderLevel, product.SalePrice, product.CostPrice, product.CategoryId, product.Active, AttributeOptionIds = optionIds });
 });
@@ -359,6 +367,8 @@ protectedApi.MapPost("/categories", async (ClaimsPrincipal principal, PosDbConte
         return Results.BadRequest(new { error = "Danh mục cha không tồn tại" });
     var category = new Category { Name = name, ParentId = request.ParentId };
     db.Categories.Add(category);
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "CATEGORY_CREATED", SubjectId = category.Id,
+        DetailsJson = JsonSerializer.Serialize(new { category.Name, category.ParentId }) });
     await db.SaveChangesAsync(ct);
     return Results.Created($"/api/v1/categories/{category.Id}", new { category.Id, category.Name, category.ParentId, category.Active });
 });
@@ -383,9 +393,10 @@ protectedApi.MapPut("/categories/{id:guid}", async (Guid id, ClaimsPrincipal pri
                 : null;
         }
     }
+    var oldCategory = new { category.Name, category.ParentId };
     category.Name = name;
     category.ParentId = request.ParentId;
-    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "CATEGORY_UPDATED", SubjectId = id });
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "CATEGORY_UPDATED", SubjectId = id, DetailsJson = JsonSerializer.Serialize(new { before = oldCategory, after = new { category.Name, category.ParentId } }) });
     await db.SaveChangesAsync(ct);
     return Results.Ok(new { category.Id, category.Name, category.ParentId, category.Active });
 });
@@ -463,6 +474,8 @@ protectedApi.MapPost("/customers", async (ClaimsPrincipal principal, PosDbContex
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
     var customer = new Customer { FullName = name, Phone = phone, Email = email, Phone2 = request.Phone2?.Trim(), Gender = request.Gender, Address = request.Address?.Trim(), Contact = request.Contact?.Trim(), Notes = request.Notes?.Trim(), GroupId = request.GroupId, AvatarData = avatar };
     db.Customers.Add(customer);
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "CUSTOMER_CREATED", SubjectId = customer.Id,
+        DetailsJson = JsonSerializer.Serialize(new { customer.FullName, customer.Phone, customer.Phone2, customer.Email, customer.Gender, customer.Address, customer.Contact, customer.Notes, customer.GroupId, hasAvatar = avatar is not null }) });
     await db.SaveChangesAsync(ct);
     return Results.Created($"/api/v1/customers/{customer.Id}", customer);
 });
@@ -480,6 +493,7 @@ protectedApi.MapPut("/customers/{id:guid}", async (Guid id, ClaimsPrincipal prin
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
     var customer = await db.Customers.SingleOrDefaultAsync(c => c.Id == id, ct);
     if (customer is null) return Results.NotFound();
+    var oldCustomer = new { customer.FullName, customer.Phone, customer.Phone2, customer.Email, customer.Gender, customer.Address, customer.Contact, customer.Notes, customer.GroupId, hasAvatar = customer.AvatarData is not null };
     customer.FullName = name;
     customer.Phone = phone;
     customer.Email = email;
@@ -490,7 +504,7 @@ protectedApi.MapPut("/customers/{id:guid}", async (Guid id, ClaimsPrincipal prin
     customer.Notes = request.Notes?.Trim();
     customer.GroupId = request.GroupId;
     customer.AvatarData = avatar;
-    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "CUSTOMER_UPDATED", SubjectId = id });
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "CUSTOMER_UPDATED", SubjectId = id, DetailsJson = JsonSerializer.Serialize(new { before = oldCustomer, after = new { customer.FullName, customer.Phone, customer.Phone2, customer.Email, customer.Gender, customer.Address, customer.Contact, customer.Notes, customer.GroupId, hasAvatar = avatar is not null } }) });
     await db.SaveChangesAsync(ct);
     return Results.Ok(customer);
 });
@@ -522,6 +536,8 @@ protectedApi.MapPost("/suppliers", async (ClaimsPrincipal principal, PosDbContex
     var supplier = new Supplier { Code = code, Name = name, Phone = request.Phone?.Trim(), Email = request.Email?.Trim().ToLowerInvariant() };
     if (supplier.Phone?.Length > 40 || supplier.Email?.Length > 320) return Results.BadRequest(new { error = "Thông tin liên hệ quá dài" });
     db.Suppliers.Add(supplier);
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "SUPPLIER_CREATED", SubjectId = supplier.Id,
+        DetailsJson = JsonSerializer.Serialize(new { supplier.Code, supplier.Name, supplier.Phone, supplier.Email }) });
     await db.SaveChangesAsync(ct);
     return Results.Created($"/api/v1/suppliers/{supplier.Id}", new { supplier.Id, supplier.Code, supplier.Name, supplier.Phone, supplier.Email });
 });
@@ -539,11 +555,12 @@ protectedApi.MapPut("/suppliers/{id:guid}", async (Guid id, ClaimsPrincipal prin
     if (supplier is null) return Results.NotFound();
     if (await db.Suppliers.AnyAsync(s => s.Code == code && s.Id != id, ct))
         return Results.Conflict(new { error = "Mã nhà cung cấp đã tồn tại" });
+    var oldSupplier = new { supplier.Code, supplier.Name, supplier.Phone, supplier.Email };
     supplier.Code = code;
     supplier.Name = name;
     supplier.Phone = phone;
     supplier.Email = email;
-    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "SUPPLIER_UPDATED", SubjectId = id });
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "SUPPLIER_UPDATED", SubjectId = id, DetailsJson = JsonSerializer.Serialize(new { before = oldSupplier, after = new { supplier.Code, supplier.Name, supplier.Phone, supplier.Email } }) });
     await db.SaveChangesAsync(ct);
     return Results.Ok(new { supplier.Id, supplier.Code, supplier.Name, supplier.Phone, supplier.Email, supplier.Active });
 });
@@ -620,6 +637,18 @@ protectedApi.MapPost("/stocktakes", async (ClaimsPrincipal principal, PosDbConte
         return Results.Created($"/api/v1/stocktakes/{session.Id}", session);
     }
     catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
+});
+protectedApi.MapDelete("/stocktakes/{id:guid}", async (ClaimsPrincipal principal, PosDbContext db, Guid id, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "inventory.adjust", ct)) return Results.Forbid();
+    var session = await db.StocktakeSessions.Include(s => s.Items).SingleOrDefaultAsync(s => s.Id == id, ct);
+    if (session is null) return Results.NotFound();
+    if (session.Status != StocktakeStatus.Draft) return Results.Conflict(new { error = "Chỉ có thể xóa phiên kiểm kho chưa xác nhận" });
+    db.StocktakeSessions.Remove(session);
+    db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "STOCKTAKE_DRAFT_DELETED", SubjectId = session.Id,
+        DetailsJson = JsonSerializer.Serialize(new { createdAt = session.CreatedAt, itemCount = session.Items.Count }) });
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
 });
 protectedApi.MapPut("/stocktakes/{id:guid}/items/{itemId:guid}", async (ClaimsPrincipal principal, PosDbContext db, StocktakeService stocktakes, Guid id, Guid itemId, CountStocktakeItemRequest request, CancellationToken ct) =>
 {
@@ -960,7 +989,7 @@ protectedApi.MapGet("/employees", async (ClaimsPrincipal principal, PosDbContext
         .Include(u => u.Permissions).OrderBy(u => u.FullName).ToListAsync(ct);
     return Results.Ok(employees.Select(u => new
     {
-        u.Id, u.Email, u.FullName, u.Active,
+        u.Id, u.Email, u.FullName, u.AvatarData, u.Active,
         Permissions = u.Permissions.Select(p => p.Permission).OrderBy(p => p).ToArray()
     }));
 });
@@ -975,15 +1004,19 @@ protectedApi.MapPost("/employees", async (ClaimsPrincipal principal, PosDbContex
         request.Password is null || request.Password.Length < 12 || !PermissionRules.AreValid(request.Permissions))
         return Results.BadRequest(new { error = "Thông tin nhân viên hoặc quyền không hợp lệ" });
     var ownerId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+    string? avatar;
+    try { avatar = ProductImageRules.Normalize(request.AvatarData); }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
     var user = new User
     {
         Email = request.Email.Trim().ToLowerInvariant(), FullName = request.FullName.Trim(),
-        PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password), Role = UserRole.Employee
+        PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password), Role = UserRole.Employee, AvatarData = avatar
     };
     foreach (var permission in request.Permissions!.Distinct(StringComparer.Ordinal))
         user.Permissions.Add(new EmployeePermission { Permission = permission, GrantedBy = ownerId });
     db.Users.Add(user);
-    db.AuditEvents.Add(new AuditEvent { ActorId = ownerId, Action = "EMPLOYEE_CREATED", SubjectId = user.Id });
+    db.AuditEvents.Add(new AuditEvent { ActorId = ownerId, Action = "EMPLOYEE_CREATED", SubjectId = user.Id,
+        DetailsJson = JsonSerializer.Serialize(new { fullName = user.FullName, email = user.Email, permissions = user.Permissions.Select(p => p.Permission).ToArray(), hasAvatar = avatar is not null }) });
     await db.SaveChangesAsync(ct);
     return Results.Created($"/api/v1/employees/{user.Id}", new { user.Id, user.Email, user.FullName });
 });
@@ -995,13 +1028,15 @@ protectedApi.MapPut("/employees/{id:guid}/permissions", async (ClaimsPrincipal p
     var employee = await db.Users.Include(u => u.Permissions).SingleOrDefaultAsync(u => u.Id == id && u.Role == UserRole.Employee, ct);
     if (employee is null) return Results.NotFound();
     var ownerId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+    var oldPermissions = employee.Permissions.Select(p => p.Permission).OrderBy(p => p).ToArray();
     await using var transaction = await db.Database.BeginTransactionAsync(ct);
     db.EmployeePermissions.RemoveRange(employee.Permissions);
     employee.Permissions.Clear();
     await db.SaveChangesAsync(ct);
     foreach (var permission in request.Permissions!.Distinct(StringComparer.Ordinal))
         employee.Permissions.Add(new EmployeePermission { Permission = permission, GrantedBy = ownerId });
-    db.AuditEvents.Add(new AuditEvent { ActorId = ownerId, Action = "EMPLOYEE_PERMISSIONS_REPLACED", SubjectId = employee.Id });
+    db.AuditEvents.Add(new AuditEvent { ActorId = ownerId, Action = "EMPLOYEE_PERMISSIONS_REPLACED", SubjectId = employee.Id,
+        DetailsJson = JsonSerializer.Serialize(new { oldPermissions, newPermissions = employee.Permissions.Select(p => p.Permission).OrderBy(p => p).ToArray() }) });
     await db.SaveChangesAsync(ct);
     await transaction.CommitAsync(ct);
     return Results.Ok(new { employee.Id, Permissions = employee.Permissions.Select(p => p.Permission) });
@@ -1049,7 +1084,7 @@ protectedApi.MapGet("/audit-events", async (ClaimsPrincipal principal, PosDbCont
     var returns = await (from r in db.SalesReturns.AsNoTracking() join o in db.SalesOrders.AsNoTracking() on r.OrderId equals o.Id
         where ids.Contains(r.Id) select new { r.Id, o.OrderNo }).ToDictionaryAsync(x => x.Id, x => x.OrderNo, ct);
     var entries = await db.CashEntries.AsNoTracking().Where(e => ids.Contains(e.Id)).ToDictionaryAsync(e => e.Id, e => e.Description, ct);
-    return Results.Ok(events.Select(e => new { e.Id, e.ActorId, e.SubjectId, e.Action, e.CreatedAt,
+    return Results.Ok(events.Select(e => new { e.Id, e.ActorId, e.SubjectId, e.Action, e.CreatedAt, e.DetailsJson,
         ActorName = users.GetValueOrDefault(e.ActorId, "Người dùng đã ngừng hoạt động"),
         SubjectName = e.Action.StartsWith("EMPLOYEE_", StringComparison.Ordinal) ? users.GetValueOrDefault(e.SubjectId, "Nhân viên") :
             e.Action.StartsWith("PRODUCT_", StringComparison.Ordinal) ? products.GetValueOrDefault(e.SubjectId, "Sản phẩm") :
@@ -1094,7 +1129,7 @@ sealed record UpdateProfileRequest(string FullName, string? AvatarData);
 sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 sealed record DailyReportPoint(DateOnly Date, decimal GrossSales, decimal ReturnedSales, decimal NetRevenue,
     decimal CashIn, decimal CashOut, decimal NetCashFlow);
-sealed record CreateEmployeeRequest(string Email, string FullName, string Password, string[]? Permissions);
+sealed record CreateEmployeeRequest(string Email, string FullName, string Password, string[]? Permissions, string? AvatarData);
 sealed record ReplacePermissionsRequest(string[]? Permissions);
 sealed record SetEmployeeStatusRequest(bool Active);
 sealed record ResetEmployeePasswordRequest(string Password);

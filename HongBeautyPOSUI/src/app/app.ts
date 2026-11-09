@@ -116,7 +116,7 @@ export class App implements OnInit {
   orderSellerId = '';
   newSupplier = { code: '', name: '', phone: '', email: '' };
   editingSupplierId = '';
-  newEmployee = { email: '', fullName: '', password: '' };
+  newEmployee = { email: '', fullName: '', password: '', avatarData: '' };
   newCashEntry = { kind: 'OperatingExpense', method: 'Cash', amount: 0, description: '' };
   readonly cashPending = signal(!!sessionStorage.getItem('hbpos_cash_pending'));
   resetEmployeePasswordInput = '';
@@ -216,11 +216,11 @@ export class App implements OnInit {
   }
 
   createProduct(): void { this.cancelProductEdit(); this.openOverlay('product'); }
-  createCategory(): void { this.cancelCategoryEdit(); this.openOverlay('category'); }
+  createCategory(): void { this.cancelCategoryEdit(); this.error.set(''); }
   createCustomer(): void { this.cancelCustomerEdit(); this.openOverlay('customer'); }
-  createSupplier(): void { this.cancelSupplierEdit(); this.openOverlay('supplier'); }
+  createSupplier(): void { this.cancelSupplierEdit(); this.error.set(''); }
 
-  async chooseProductImage(event: Event, target: 'product' | 'customer' | 'profile' = 'product'): Promise<void> {
+  async chooseProductImage(event: Event, target: 'product' | 'customer' | 'profile' | 'employee' = 'product'): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -244,6 +244,7 @@ export class App implements OnInit {
       if (image.length > 210_000) throw new Error('Ảnh sau khi nén vẫn quá lớn. Hãy chọn ảnh đơn giản hơn.');
       if (target === 'product') this.newProduct.imageData = image;
       else if (target === 'customer') this.newCustomer.avatarData = image;
+      else if (target === 'employee') this.newEmployee.avatarData = image;
       else this.profileAvatarData = image;
       this.error.set('');
     } catch (error) { this.error.set(error instanceof Error ? error.message : 'Không đọc được ảnh.'); }
@@ -495,7 +496,7 @@ export class App implements OnInit {
   editCategory(category: Category): void {
     this.editingCategoryId = category.id;
     this.newCategory = { name: category.name, parentId: category.parentId ?? '' };
-    this.openOverlay('category');
+    this.error.set('');
   }
 
   cancelCategoryEdit(): void {
@@ -511,7 +512,6 @@ export class App implements OnInit {
       else await this.api.post('/categories', payload);
       this.notice.set(this.editingCategoryId ? 'Đã cập nhật danh mục' : 'Đã tạo danh mục');
       this.cancelCategoryEdit();
-      this.overlay.set(null);
       await this.refresh();
     } catch { this.error.set('Không lưu được danh mục. Kiểm tra tên, danh mục cha và quan hệ cấp cha.'); }
     finally { this.loading.set(false); }
@@ -581,7 +581,7 @@ export class App implements OnInit {
   editSupplier(supplier: Supplier): void {
     this.editingSupplierId = supplier.id;
     this.newSupplier = { code: supplier.code, name: supplier.name, phone: supplier.phone ?? '', email: supplier.email ?? '' };
-    this.openOverlay('supplier');
+    this.error.set('');
   }
 
   cancelSupplierEdit(): void {
@@ -596,7 +596,6 @@ export class App implements OnInit {
       else await this.api.post('/suppliers', this.newSupplier);
       this.notice.set(this.editingSupplierId ? 'Đã cập nhật nhà cung cấp' : 'Đã tạo nhà cung cấp');
       this.cancelSupplierEdit();
-      this.overlay.set(null);
       await this.refresh();
     } catch { this.error.set('Không lưu được nhà cung cấp. Kiểm tra mã đã trùng hoặc thông tin nhập.'); }
     finally { this.loading.set(false); }
@@ -617,8 +616,7 @@ export class App implements OnInit {
     this.loading.set(true); this.error.set('');
     try {
       await this.api.post('/employees', { ...this.newEmployee, permissions: ['products.read'] });
-      this.newEmployee = { email: '', fullName: '', password: '' };
-      this.overlay.set(null);
+      this.newEmployee = { email: '', fullName: '', password: '', avatarData: '' };
       this.notice.set('Đã tạo nhân viên');
       await this.refresh();
     } catch { this.error.set('Không tạo được nhân viên. Kiểm tra thông tin và email trùng.'); }
@@ -710,6 +708,18 @@ export class App implements OnInit {
       this.currentStocktake.set(session);
       this.actualByItem = Object.fromEntries(session.items.map(item => [item.id, item.actualQuantity ?? item.expectedQuantity]));
     } catch { this.error.set('Không tải được phiên kiểm kho.'); }
+    finally { this.loading.set(false); }
+  }
+
+  async deleteStocktake(session: StocktakeSession): Promise<void> {
+    if (session.status !== 'Draft' || !await this.askConfirmation('Xóa phiên kiểm kho chưa xác nhận này?')) return;
+    this.loading.set(true); this.error.set('');
+    try {
+      await this.api.delete(`/stocktakes/${session.id}`);
+      if (this.currentStocktake()?.id === session.id) this.currentStocktake.set(null);
+      this.notice.set('Đã xóa phiên kiểm kho chưa xác nhận');
+      await this.refresh();
+    } catch (error) { this.error.set(this.apiErrorMessage(error, 'Không xóa được phiên kiểm kho.')); }
     finally { this.loading.set(false); }
   }
 
@@ -967,6 +977,44 @@ export class App implements OnInit {
     this.openOverlay('auditDetail');
   }
 
+  auditDetailRows(event: AuditEvent): { label: string; value: string }[] {
+    if (!event.detailsJson) return [{ label: 'Chi tiết', value: 'Nhật ký cũ không lưu nội dung thay đổi.' }];
+    try {
+      const data = JSON.parse(event.detailsJson) as Record<string, unknown>;
+      const names: Record<string, string> = {
+        fullName: 'Họ tên', email: 'Email', permissions: 'Quyền được cấp',
+        oldPermissions: 'Quyền trước đây', newPermissions: 'Quyền sau cập nhật',
+        hasAvatar: 'Ảnh đại diện', hasImage: 'Ảnh sản phẩm', createdAt: 'Ngày tạo phiên', itemCount: 'Số sản phẩm',
+        name: 'Tên', code: 'Mã', sku: 'SKU', barcode: 'Mã vạch', unit: 'Đơn vị',
+        salePrice: 'Giá bán', costPrice: 'Giá vốn', reorderLevel: 'Ngưỡng cảnh báo',
+        categoryId: 'Danh mục', parentId: 'Danh mục cha', groupId: 'Nhóm khách hàng',
+        phone: 'Điện thoại', phone2: 'Điện thoại 2', gender: 'Giới tính', address: 'Địa chỉ',
+        contact: 'Liên hệ', notes: 'Ghi chú', attributes: 'Thuộc tính'
+      };
+      const format = (key: string, value: unknown): string => {
+        if (Array.isArray(value)) return value.length ? value.map(v => key.toLowerCase().includes('permission') ? this.permissionLabel(String(v)) : String(v)).join(', ') : 'Không có';
+        if (typeof value === 'boolean') return value ? 'Có' : 'Không';
+        if (value == null || value === '') return '—';
+        if (key === 'createdAt') return this.formatVietnamTime(String(value));
+        if (key === 'categoryId' || key === 'parentId') return this.categoryName(String(value));
+        if (key === 'groupId') return this.customerGroupName(String(value));
+        if (key === 'gender') return value === 'Female' ? 'Nữ' : value === 'Male' ? 'Nam' : value === 'Other' ? 'Khác' : '—';
+        if (['salePrice', 'costPrice'].includes(key)) return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value));
+        return String(value);
+      };
+      const previous = data['before'] as Record<string, unknown> | undefined;
+      const current = data['after'] as Record<string, unknown> | undefined;
+      if (previous && current) return Object.entries(current).filter(([key, value]) => JSON.stringify(previous[key]) !== JSON.stringify(value)).map(([key, value]) => {
+        const normalized = key[0].toLowerCase() + key.slice(1);
+        return { label: names[normalized] ?? normalized, value: `${format(normalized, previous[key])} → ${format(normalized, value)}` };
+      });
+      return Object.entries(data).map(([key, value]) => {
+        const normalized = key[0].toLowerCase() + key.slice(1);
+        return { label: names[normalized] ?? normalized, value: format(normalized, value) };
+      });
+    } catch { return [{ label: 'Chi tiết', value: 'Không đọc được nội dung thay đổi.' }]; }
+  }
+
   auditActionLabel(action: string): string {
     const labels: Record<string, string> = {
       EMPLOYEE_CREATED: 'Tạo nhân viên', EMPLOYEE_PERMISSIONS_REPLACED: 'Cập nhật quyền nhân viên',
@@ -978,7 +1026,8 @@ export class App implements OnInit {
       SUPPLIER_UPDATED: 'Sửa nhà cung cấp', SUPPLIER_ACTIVATED: 'Mở nhà cung cấp', SUPPLIER_DEACTIVATED: 'Ngừng nhà cung cấp',
       SALE_RETURN_CREATED: 'Tạo phiếu trả hàng', CASH_ENTRY_CREATED: 'Ghi phiếu thu chi',
       PROFILE_UPDATED: 'Cập nhật tài khoản', PASSWORD_CHANGED: 'Đổi mật khẩu',
-      OWNER_PASSWORD_RECOVERED: 'Khôi phục mật khẩu Chủ sở hữu'
+      OWNER_PASSWORD_RECOVERED: 'Khôi phục mật khẩu Chủ sở hữu', STOCKTAKE_DRAFT_DELETED: 'Xóa phiên kiểm kho nháp',
+      PRODUCT_CREATED: 'Tạo sản phẩm', CATEGORY_CREATED: 'Tạo danh mục', CUSTOMER_CREATED: 'Tạo khách hàng', SUPPLIER_CREATED: 'Tạo nhà cung cấp'
     };
     return labels[action] ?? 'Thao tác hệ thống';
   }

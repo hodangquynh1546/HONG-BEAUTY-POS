@@ -73,6 +73,9 @@ namespace HongBeautyPOS.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DetailsJson")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("SubjectId")
                         .HasColumnType("uuid");
 

@@ -10,8 +10,8 @@ export interface Category { id: string; name: string; parentId: string | null; a
 export interface Customer { id: string; fullName: string; phone: string | null; phone2: string | null; gender: string | null; address: string | null; contact: string | null; notes: string | null; groupId: string | null; avatarData: string | null; email: string | null; active: boolean; }
 export interface CustomerGroup { id: string; name: string; active: boolean; }
 export interface Supplier { id: string; code: string; name: string; phone: string | null; email: string | null; active: boolean; }
-export interface Employee { id: string; email: string; fullName: string; active: boolean; permissions: string[]; }
-export interface AuditEvent { id: string; actorId: string; actorName: string; action: string; subjectId: string; subjectName: string; createdAt: string; }
+export interface Employee { id: string; email: string; fullName: string; avatarData: string | null; active: boolean; permissions: string[]; }
+export interface AuditEvent { id: string; actorId: string; actorName: string; action: string; subjectId: string; subjectName: string; createdAt: string; detailsJson: string | null; }
 export interface StockItem { productId: string; sku: string; name: string; quantity: number; reorderLevel: number; }
 export interface StockMovement { id: string; productId: string; productName: string; performerName: string; type: string; delta: number; before: number; after: number; reason: string; createdAt: string; }
 export interface StocktakeLine { id: string; productId: string; sku: string; name: string; expectedQuantity: number; actualQuantity: number | null; }
@@ -76,5 +76,6 @@ export class ApiService {
   post<T>(path: string, body: unknown): Promise<T> { return this.request(firstValueFrom(this.http.post<T>(this.base + path, body, { headers: this.headers() }))); }
   put<T>(path: string, body: unknown): Promise<T> { return this.request(firstValueFrom(this.http.put<T>(this.base + path, body, { headers: this.headers() }))); }
   patch<T>(path: string, body: unknown): Promise<T> { return this.request(firstValueFrom(this.http.patch<T>(this.base + path, body, { headers: this.headers() }))); }
+  delete(path: string): Promise<void> { return this.request(firstValueFrom(this.http.delete<void>(this.base + path, { headers: this.headers() }))); }
   private headers(): HttpHeaders { return this.token ? new HttpHeaders({ Authorization: `Bearer ${this.token}` }) : new HttpHeaders(); }
 }

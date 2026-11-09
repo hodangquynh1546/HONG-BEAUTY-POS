@@ -45,7 +45,10 @@ try:
     owner_token = token
     employee_email = 'employee-' + secrets.token_hex(6) + '@example.invalid'
     employee_password = 'B8!' + secrets.token_urlsafe(20)
-    _, employee = call('POST','/api/v1/employees',{'email':employee_email,'fullName':'Test Employee','password':employee_password,'permissions':['products.read']})
+    avatar = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/+RUAAAAASUVORK5CYII='
+    _, employee = call('POST','/api/v1/employees',{'email':employee_email,'fullName':'Test Employee','password':employee_password,'permissions':['products.read'],'avatarData':avatar})
+    _, employee_list = call('GET','/api/v1/employees')
+    assert next(e for e in employee_list if e['id'] == employee['id'])['avatarData'] == avatar
     _, employee_auth = call('POST','/api/v1/auth/login',{'email':employee_email,'password':employee_password})
     token = employee_auth['accessToken']
     call('GET','/api/v1/products')
@@ -104,6 +107,10 @@ try:
     assert {'EMPLOYEE_CREATED','EMPLOYEE_PERMISSIONS_REPLACED','EMPLOYEE_PASSWORD_RESET','EMPLOYEE_DEACTIVATED'}.issubset({event['action'] for event in audit})
     assert all(event['actorName'] and event['subjectName'] for event in audit)
     assert any(event['action'] == 'EMPLOYEE_PASSWORD_RESET' and event['subjectName'] == 'Test Employee' for event in audit)
+    employee_creation = next(event for event in audit if event['action'] == 'EMPLOYEE_CREATED')
+    assert json.loads(employee_creation['detailsJson'])['hasAvatar'] is True
+    permission_change = next(event for event in audit if event['action'] == 'EMPLOYEE_PERMISSIONS_REPLACED')
+    assert json.loads(permission_change['detailsJson']) == {'oldPermissions':['products.read'], 'newPermissions':['products.read','reports.read']}
     token = employee_auth['accessToken']
     try:
         call('GET','/api/v1/products')
@@ -211,6 +218,17 @@ try:
     item=next(x for x in take['items'] if x['productId']==pid)
     call('PUT',f"/api/v1/stocktakes/{take['id']}/items/{item['id']}",{'actualQuantity':8})
     call('POST',f"/api/v1/stocktakes/{take['id']}/complete",{})
+    try:
+        call('DELETE',f"/api/v1/stocktakes/{take['id']}")
+        raise AssertionError('Completed stocktake was deleted')
+    except RuntimeError as error:
+        assert 'HTTP 409' in str(error), error
+    _, draft_take = call('POST','/api/v1/stocktakes',{})
+    call('DELETE',f"/api/v1/stocktakes/{draft_take['id']}")
+    _, current_takes = call('GET','/api/v1/stocktakes')
+    assert all(item['id'] != draft_take['id'] for item in current_takes)
+    _, audit = call('GET','/api/v1/audit-events')
+    assert any(event['action'] == 'STOCKTAKE_DRAFT_DELETED' and json.loads(event['detailsJson'])['itemCount'] > 0 for event in audit)
     _, stock=call('GET','/api/v1/stock')
     assert next(x for x in stock if x['productId']==pid)['quantity']==8
     _, movements = call('GET',f'/api/v1/stock/movements?productId={pid}&skip=0&take=2')

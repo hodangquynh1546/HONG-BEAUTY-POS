@@ -12,5 +12,7 @@ public sealed class AuditEvent
 
 	public Guid SubjectId { get; set; }
 
+	public string? DetailsJson { get; set; }
+
 	public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

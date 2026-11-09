@@ -179,9 +179,29 @@ body,button,input,select,textarea{font-family:'Times New Roman',Times,serif}h1,h
 
 .mobile-product-list { display: none; }
 .mobile-customer-list { display: none; }
+.mobile-record-list { display: none; }
+@media (min-width: 651px) and (max-width: 900px) {
+  .sidebar { width: 200px; }
+  .brand { padding: 16px 10px; }
+  .sidebar nav { padding: 0 7px; }
+  .sidebar nav button { padding: 10px 8px; gap: 8px; }
+  .content { padding: 22px 18px; }
+}
 @media (max-width: 650px) {
   .desktop-product-table { display: none; }
   .desktop-customer-table { display: none; }
+  .desktop-category-table, .desktop-stock-table { display: none; }
+  .mobile-record-list { display: grid; gap: 6px; }
+  .list-with-form > .grow > .mobile-record-list { flex: 1; min-height: 0; align-content: start; overflow-y: auto; }
+  .mobile-record { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 60px; padding: 8px 9px; border: 1px solid #ede3df; border-radius: 8px; }
+  .mobile-record > div:first-child { display: grid; gap: 3px; min-width: 0; flex: 1; }
+  .mobile-record strong { font-size: .83rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-record small { color: #807479; font-size: .73rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-record-actions { display: flex; gap: 4px; flex: none; }
+  .mobile-record-actions .icon-button { width: 35px; min-width: 35px; height: 35px; }
+  .mobile-record-actions .material-symbols-outlined { font-size: 19px; }
+  .mobile-stock-qty { flex: none; color: #336f53; font-size: .78rem; font-weight: 700; }
+  .mobile-stock-qty.low { color: #ae5834; }
   .mobile-product-list { display: grid; gap: 6px; }
   .mobile-product-card { border: 1px solid #ede3df; border-radius: 9px; background: #fff; }
   .mobile-product-card summary { display: flex; align-items: center; gap: 9px; padding: 8px; list-style: none; cursor: pointer; min-height: 68px; }
@@ -208,4 +228,59 @@ body,button,input,select,textarea{font-family:'Times New Roman',Times,serif}h1,h
   .mobile-customer-main small { color: #7e7175; font-size: .72rem; }
   .mobile-customer-card[open] .mobile-product-chevron { transform: rotate(180deg); }
   .mobile-customer-detail { display: grid; gap: 5px; padding: 8px 10px 10px; border-top: 1px solid #f0e8e5; font-size: .76rem; overflow-wrap: anywhere; }
+  .login-page .login-card .password-field input { height: 40px; margin-top: 4px; }
+  .login-page .login-card .password-field .password-toggle { top: 4px; height: 40px; }
+}
+
+.receipt-print { max-width: 760px; margin: 18px auto; padding: 28px; color: #2d2529; }
+.receipt-actions { margin-bottom: 18px; }
+.receipt-actions .refresh { display: inline-flex; align-items: center; gap: 5px; }
+.receipt-actions .material-symbols-outlined { font-size: 19px; }
+.receipt-head { display: flex; align-items: center; gap: 16px; padding-bottom: 19px; border-bottom: 2px solid #673047; }
+.receipt-logo { width: 62px; height: 62px; border-radius: 11px; object-fit: cover; }
+.receipt-head .eyebrow { margin: 0 0 4px; }
+.receipt-head h2 { margin: 0; font-size: 1.65rem; }
+.receipt-code { margin: 4px 0 0; font-size: .9rem; font-weight: 700; color: #673047; }
+.receipt-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; padding: 16px 0 20px; }
+.receipt-meta > div { display: grid; gap: 3px; min-width: 0; }
+.receipt-meta span { font-size: .74rem; color: #786d71; }
+.receipt-meta strong { font-size: .88rem; overflow-wrap: anywhere; }
+.receipt-items table { width: 100%; font-size: .82rem; }
+.receipt-items th { background: #f6eef0; color: #5e293e; }
+.receipt-items td { vertical-align: top; }
+.receipt-items td:first-child { white-space: normal; min-width: 120px; }
+.receipt-items td:first-child strong, .receipt-items td small { display: block; }
+.receipt-items td small { margin-top: 3px; color: #786d71; font-size: .72rem; }
+.receipt-items td:last-child, .receipt-items th:last-child { text-align: right; font-weight: 700; }
+.receipt-totals { width: min(330px, 100%); margin: 18px 0 0 auto; }
+.receipt-totals > div, .receipt-payments > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: .86rem; }
+.receipt-totals strong, .receipt-payments > div span:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.receipt-grand { border-top: 1px solid #dbcdcf; color: #642b40; font-weight: 700; }
+.receipt-grand strong { font-size: 1.12rem; }
+.receipt-debt { border-top: 1px solid #dbcdcf; font-weight: 700; }
+.receipt-payments { border-top: 1px dashed #dbcdcf; margin-top: 20px; padding-top: 12px; }
+.receipt-payments > strong { font-size: .85rem; }
+.receipt-thanks { text-align: center; margin: 26px 0 0; padding-top: 15px; border-top: 1px dashed #dbcdcf; color: #6b4a56; font-style: italic; }
+@media screen and (max-width: 650px) {
+  .receipt-print { padding: 15px 11px; }
+  .receipt-logo { width: 48px; height: 48px; }
+  .receipt-head h2 { font-size: 1.22rem; }
+  .receipt-meta { gap: 8px; }
+  .receipt-items table, .receipt-items tbody { display: block; width: 100%; min-width: 0; }
+  .receipt-items thead { display: none; }
+  .receipt-items tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 9px 0; border-bottom: 1px solid #eee5df; }
+  .receipt-items td { display: block; padding: 0; border: 0; min-width: 0; font-size: .76rem; white-space: normal; overflow-wrap: anywhere; }
+  .receipt-items td:first-child { grid-column: 1 / -1; }
+  .receipt-items td:not(:first-child)::before { display: block; margin-bottom: 2px; color: #786d71; font-size: .68rem; }
+  .receipt-items td:nth-child(2)::before { content: 'SL'; }
+  .receipt-items td:nth-child(3)::before { content: 'Đơn giá'; }
+  .receipt-items td:nth-child(4)::before { content: 'Giảm'; }
+  .receipt-items td:nth-child(5)::before { content: 'Thành tiền'; }
+  .receipt-items td:last-child { text-align: left; }
+}
+@media print {
+  #receipt-print-area { padding: 0 !important; }
+  #receipt-print-area .receipt-items { overflow: visible; }
+  #receipt-print-area .receipt-items table { min-width: 0; }
+  #receipt-print-area .receipt-print { box-shadow: none; }
 }

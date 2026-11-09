@@ -606,6 +606,25 @@ protectedApi.MapGet("/orders/{id:guid}/items", async (ClaimsPrincipal principal,
     if (!await db.SalesOrders.AnyAsync(o => o.Id == id, ct)) return Results.NotFound();
     return Results.Ok(await returns.GetOrderLinesAsync(id, ct));
 });
+protectedApi.MapGet("/orders/{id:guid}/receipt", async (ClaimsPrincipal principal, PosDbContext db, Guid id, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "sales.read", ct)) return Results.Forbid();
+    var order = await db.SalesOrders.AsNoTracking().SingleOrDefaultAsync(o => o.Id == id, ct);
+    if (order is null) return Results.NotFound();
+    var customerName = order.CustomerId.HasValue
+        ? await db.Customers.AsNoTracking().Where(c => c.Id == order.CustomerId.Value).Select(c => c.FullName).SingleOrDefaultAsync(ct)
+        : null;
+    var sellerName = await db.Users.AsNoTracking().Where(u => u.Id == order.SoldBy).Select(u => u.FullName).SingleOrDefaultAsync(ct);
+    var items = await db.SalesOrderItems.AsNoTracking().Where(i => i.OrderId == id).OrderBy(i => i.NameSnapshot)
+        .Select(i => new { i.SkuSnapshot, i.NameSnapshot, i.Quantity, i.UnitPrice, LineTotal = i.Quantity * i.UnitPrice }).ToListAsync(ct);
+    var payments = await db.Payments.AsNoTracking().Where(p => p.OrderId == id).OrderBy(p => p.ReceivedAt)
+        .Select(p => new { p.Method, p.Amount, p.ReceivedAt }).ToListAsync(ct);
+    return Results.Ok(new { order.Id, order.OrderNo, order.CreatedAt, Status = order.Status.ToString(),
+        CustomerName = customerName ?? "Khách lẻ", SellerName = sellerName ?? "—", order.Subtotal, order.Discount,
+        order.Total, order.PaidTotal, order.ReturnedTotal, order.RefundedTotal,
+        RemainingDebt = Math.Max(0, order.Total - order.ReturnedTotal - order.PaidTotal + order.RefundedTotal),
+        Items = items, Payments = payments });
+});
 protectedApi.MapGet("/orders/{id:guid}/returns", async (ClaimsPrincipal principal, PosDbContext db, ReturnService returns, Guid id, CancellationToken ct) =>
 {
     if (!await HasPermission(principal, db, "sales.read", ct)) return Results.Forbid();

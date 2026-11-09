@@ -148,6 +148,10 @@ try:
     _, sale = call('POST','/api/v1/orders',{'idempotencyKey':str(__import__('uuid').uuid4()),'discount':0,'items':[{'productId':pid,'quantity':2}]})
     order_id=sale['id']
     call('POST',f'/api/v1/orders/{order_id}/payments',{'idempotencyKey':str(__import__('uuid').uuid4()),'method':'Cash','amount':200})
+    _, receipt = call('GET',f'/api/v1/orders/{order_id}/receipt')
+    assert receipt['orderNo'] == sale['orderNo'] and receipt['total'] == 200 and receipt['paidTotal'] == 200
+    assert receipt['remainingDebt'] == 0 and len(receipt['items']) == 1 and receipt['items'][0]['lineTotal'] == 200
+    assert len(receipt['payments']) == 1 and receipt['payments'][0]['amount'] == 200
     _, lines=call('GET',f'/api/v1/orders/{order_id}/items')
     _, ret=call('POST',f'/api/v1/orders/{order_id}/returns',{'idempotencyKey':str(__import__('uuid').uuid4()),'reason':'Test customer return','refundAmount':100,'refundMethod':'Cash','items':[{'orderItemId':lines[0]['id'],'quantity':1,'restock':True}]})
     assert ret['refundAmount']==100

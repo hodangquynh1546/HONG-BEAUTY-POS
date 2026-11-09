@@ -3,3 +3,14 @@
 .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.product-card{min-height:150px;text-align:left;background:#fff;border:1px solid #eadfdb;border-radius:10px;padding:13px;display:flex;flex-direction:column;gap:5px}.product-card:hover{border-color:#91556a}.product-card b{font-size:.84rem}.product-card strong{font-size:.84rem;color:#672c43}.product-card small{color:#8a7d80}.product-icon{width:40px;height:40px;border-radius:9px;background:#f2e5e8;color:#78364f;display:grid;place-items:center;font-weight:bold;margin-bottom:4px}.cart-row{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #f0e9e4;padding:12px 0}.cart-row b,.cart-row small{display:block;font-size:.82rem}.cart-row small{color:#8d7f82;margin-top:4px}.cart-qty{display:flex;align-items:center;gap:7px}.cart-qty button{width:25px;height:25px;border:1px solid #e4d7d3;background:white;border-radius:6px}.cart-total{display:flex;justify-content:space-between;margin:21px 0}.cart-total strong{color:#62293e}
 .permission-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px 18px;margin:18px 0}.permission-option{display:flex;align-items:center;gap:10px;padding:11px;border:1px solid #eee5df;border-radius:8px;margin:0}.permission-option input{width:18px;height:18px;margin:0;flex-shrink:0}
 @media(max-width:650px){.brand{padding-top:max(13px,env(safe-area-inset-top))}.account{display:flex;padding:8px 16px 12px;border-top:0}.account .avatar{height:30px;width:30px}.content{padding-bottom:max(22px,env(safe-area-inset-bottom))}.product-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.product-card{min-height:130px}.cart-qty button{width:40px;height:40px}.primary{min-height:48px}}
+
+.receipt-print { max-width: 760px; margin-top: 18px; }
+.receipt-actions { display: flex; gap: 8px; justify-content: flex-end; }
+@media print {
+  body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  #receipt-print-area, #receipt-print-area * { visibility: visible !important; }
+  #receipt-print-area { position: absolute; inset: 0 auto auto 0; width: 100%; max-width: none; margin: 0; padding: 12mm; border: 0; box-shadow: none; color: #111; }
+  #receipt-print-area .receipt-actions { display: none !important; }
+  #receipt-print-area .table-wrap { overflow: visible; }
+}

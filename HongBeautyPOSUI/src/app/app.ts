@@ -2,7 +2,7 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApiService, type Employee, type AuditEvent, type Product, type StockItem, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type ReportSummary, type Category, type Customer, type Supplier } from './core/api.service';
+import { ApiService, type Employee, type AuditEvent, type Product, type StockItem, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type Category, type Customer, type Supplier } from './core/api.service';
 
 type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'reports' | 'employees' | 'audit';
 
@@ -31,6 +31,7 @@ export class App implements OnInit {
   readonly currentStocktake = signal<StocktakeSession | null>(null);
   readonly purchases = signal<PurchaseReceipt[]>([]);
   readonly orders = signal<SalesOrder[]>([]);
+  readonly receipt = signal<OrderReceipt | null>(null);
   readonly orderTotal = signal(0);
   readonly report = signal<ReportSummary | null>(null);
   readonly returnLines = signal<OrderLine[]>([]);
@@ -557,6 +558,19 @@ export class App implements OnInit {
     } catch { this.error.set('Không tải được chi tiết đơn hàng.'); }
     finally { this.loading.set(false); }
   }
+
+  async openReceipt(orderId: string): Promise<void> {
+    this.loading.set(true); this.error.set('');
+    try { this.receipt.set(await this.api.get<OrderReceipt>(`/orders/${orderId}/receipt`)); }
+    catch { this.error.set('Không tải được hóa đơn. Vui lòng thử lại.'); }
+    finally { this.loading.set(false); }
+  }
+
+  formatVietnamTime(value: string): string {
+    return new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  }
+
+  windowPrint(): void { window.print(); }
 
   async submitReturn(): Promise<void> {
     if (!this.returnOrderId) return;

@@ -20,6 +20,7 @@
 - Sản phẩm có mã vạch, đơn vị tính và ngưỡng cảnh báo tồn đi từ form tới API/database; tìm đúng mã vạch. PostgreSQL integration smoke test xác nhận tạo, đọc, sửa và tìm mã vạch cùng các luồng nghiệp vụ cũ.
 - POS mobile có nút quét mã vạch bằng camera qua plugin Capacitor; mã quét được tra trên API thực rồi thêm sản phẩm đang bán vào giỏ. Angular build và đồng bộ native Android/iOS đạt; chưa kiểm thử camera trên thiết bị thật hoặc build APK/IPA.
 - Owner đặt lại mật khẩu nhân viên qua giao diện/API, thao tác được ghi Audit Log. JWT cũ bị từ chối ngay khi mật khẩu đổi hoặc tài khoản bị khóa; PostgreSQL integration smoke test đã xác nhận nhân viên không tự đặt lại qua API Owner, mật khẩu cũ và phiên cũ không còn dùng được, mật khẩu mới đăng nhập được.
+- Xem và in hóa đơn từ chi tiết đơn, sản phẩm và các khoản thanh toán trong database; trình duyệt có thể lưu bản in thành PDF. PostgreSQL integration smoke test xác nhận tổng tiền, tiền đã thu, công nợ và dòng hàng. Chưa kiểm tra máy in vật lý hoặc chức năng in trên app native.
 - Sửa khởi động Render khi chưa có biến `OWNER_*`: dịch vụ ghi cảnh báo và vẫn chạy; khi nhập đủ thông tin hợp lệ rồi triển khai lại thì tạo Chủ sở hữu. PostgreSQL smoke test trên database mới xác nhận `/health` trả 200 trước khi thiết lập, đăng nhập trả 401 trước và 200 sau khi nhập thông tin.
 
 ## Chưa xác minh

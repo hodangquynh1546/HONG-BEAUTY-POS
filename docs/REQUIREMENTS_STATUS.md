@@ -9,7 +9,7 @@ Kiểm tra trên source ở nhánh `main` ngày 2026-11-09. `training-doc.md` kh
 | Dashboard | Có báo cáo tổng hợp lấy từ PostgreSQL | Thiếu bộ lọc nhanh, biểu đồ, đơn mới, hàng bán chạy, phân bố thanh toán |
 | Sản phẩm và danh mục | Có CRUD/status, SKU, mã vạch, đơn vị, ngưỡng cảnh báo, tồn và danh mục cha/con; tìm theo tên, SKU hoặc mã vạch | Thiếu import/export Excel, nhiều ảnh, biến thể, thương hiệu và bộ lọc đầy đủ |
 | Kho, nhập và kiểm kho | Có phiếu nhập, điều chỉnh, stock movement, kiểm kho và giao dịch database | Thiếu vòng đời Draft/Cancelled của phiếu nhập, báo hàng tồn lâu, xuất kho theo lý do chuẩn hóa; cần thử tải đồng thời |
-| POS và thanh toán | Có tạo đơn idempotency, trừ kho và thanh toán từng phần | Thiếu kết hợp phương thức ngay trên màn hình POS, QR, hóa đơn/PDF, chỉnh/hủy đơn theo quy tắc, thử mất mạng |
+| POS và thanh toán | Có tạo đơn idempotency, trừ kho, thanh toán từng phần; xem/in hóa đơn từ dữ liệu thật và lưu PDF qua hộp thoại in của trình duyệt | Thiếu kết hợp phương thức ngay trên màn hình POS, QR, xuất PDF tự động, chỉnh/hủy đơn theo quy tắc, thử mất mạng |
 | Trả hàng và hoàn tiền | Có API trả một phần, điều kiện nhập lại kho và số tiền hoàn | Cần kiểm thử luồng tài chính đầy đủ, chứng từ hoàn và UI chi tiết |
 | Khách hàng và nhà cung cấp | Có CRUD/status và tìm khách theo tên/điện thoại/email | Thiếu lịch sử giao dịch/công nợ, phân nhóm, xuất Excel và tìm nhà cung cấp |
 | Thu chi và báo cáo | Có cash entries và summary từ database; tách doanh thu, tiền thu, giá vốn | Thiếu phân loại/đối soát nâng cao, báo cáo ngày/nhân viên/sản phẩm, Excel/PDF |

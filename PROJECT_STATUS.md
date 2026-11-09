@@ -1,10 +1,13 @@
 # Miêu — trạng thái khôi phục
 
+Đối chiếu từng nhóm yêu cầu của Master Implementation Prompt tại [docs/REQUIREMENTS_STATUS.md](docs/REQUIREMENTS_STATUS.md). Dự án **chưa đạt điều kiện hoàn thành** của prompt.
+
 ## Đã khôi phục trong bản này
 
 - Tên hiển thị Miêu trên web, Android và iOS.
 - Mã nguồn Domain, Application, Infrastructure và 7 migration được khôi phục từ các bản dựng .NET còn lưu trong không gian làm việc. Đây là bản mã cũ, không phải bản sao của commit `914045c`.
 - `render.yaml` triển khai API và giao diện cùng một dịch vụ Docker. Khi khởi động, dịch vụ áp dụng migration; nếu chưa có Chủ sở hữu thì tạo từ các biến môi trường được nhập riêng. `/health` chỉ báo khỏe khi kết nối database được và không còn migration chờ.
+- `docker-compose.yml` định nghĩa PostgreSQL có volume/healthcheck và ứng dụng phụ thuộc database; `.dockerignore` chặn secret và bản dựng khỏi Docker context. Chưa chạy thử Compose vì môi trường thiếu Docker engine.
 - `.env.example` và `docs/DEPLOYMENT.md` mô tả biến môi trường và các bước triển khai.
 
 ## Kiểm tra đã chạy

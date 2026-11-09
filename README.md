@@ -14,7 +14,7 @@ Xem [MOBILE-SETUP.md](MOBILE-SETUP.md) để đồng bộ và build ứng dụng
 
 1. Sao chép `.env.example` thành `.env` và thay tất cả mật khẩu/secret mẫu bằng giá trị mạnh, riêng biệt.
 2. Chạy `docker compose up -d --build`. Compose chạy PostgreSQL, migration rồi khởi động ứng dụng tại `http://localhost:8080`.
-3. Khởi tạo Owner một lần: xuất `OWNER_EMAIL`, `OWNER_NAME`, `OWNER_PASSWORD` trong môi trường shell, rồi chạy `docker compose run --rm -e OWNER_EMAIL -e OWNER_NAME -e OWNER_PASSWORD app --bootstrap-owner`.
+3. Khởi tạo Owner một lần: đặt `OWNER_EMAIL`, `OWNER_NAME`, `OWNER_PASSWORD` trong môi trường shell, rồi chạy `docker compose run --rm -e OWNER_EMAIL -e OWNER_NAME -e OWNER_PASSWORD app --bootstrap-owner`. Không lưu mật khẩu Owner vào `.env` nếu không cần.
 4. Kiểm tra `http://localhost:8080/health`, sau đó đăng nhập bằng tài khoản Owner vừa tạo.
 
 Không lưu Owner password hoặc database URL thật vào Git. Bước bootstrap sẽ từ chối tạo Owner thứ hai. Nếu dùng Neon, gán `DATABASE_URL` bằng URI `postgresql://...` trong cấu hình môi trường của ứng dụng; backend tự chuyển sang định dạng Npgsql. Đừng dán URL này vào issue, chat hoặc log vì nó chứa mật khẩu.

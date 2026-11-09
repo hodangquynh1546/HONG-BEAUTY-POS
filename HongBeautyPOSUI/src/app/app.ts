@@ -2,7 +2,7 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApiService, type Employee, type AuditEvent, type Product, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
+import { ApiService, type Employee, type AuditEvent, type Product, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
 
 type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit';
 
@@ -41,6 +41,7 @@ export class App implements OnInit {
   readonly receipt = signal<OrderReceipt | null>(null);
   readonly orderTotal = signal(0);
   readonly report = signal<ReportSummary | null>(null);
+  readonly paymentMethodReport = signal<PaymentMethodReport[]>([]);
   readonly returnLines = signal<OrderLine[]>([]);
   readonly cart = signal<Record<string, number>>(JSON.parse(sessionStorage.getItem('hbpos_cart') || '{}'));
   readonly cartItems = computed(() => this.products().filter(p => (this.cart()[p.id] || 0) > 0));
@@ -214,7 +215,7 @@ export class App implements OnInit {
         const pending = this.orders().find(o => o.id === this.pendingOrderId);
         if (pending) this.paymentAmount = Math.max(0, pending.total - pending.paidTotal);
       }
-      if (this.api.can('reports.read')) this.report.set(await this.api.get<ReportSummary>(`/reports/summary?from=${this.reportFrom}&to=${this.reportTo}`));
+      if (this.api.can('reports.read')) await this.fetchReport();
       if (this.api.user()?.role === 'Owner') {
         this.employees.set(await this.api.get<Employee[]>('/employees'));
         this.availablePermissions.set(await this.api.get<string[]>('/permissions'));
@@ -696,8 +697,18 @@ export class App implements OnInit {
 
   async loadReport(): Promise<void> {
     this.loading.set(true); this.error.set('');
-    try { this.report.set(await this.api.get<ReportSummary>(`/reports/summary?from=${this.reportFrom}&to=${this.reportTo}`)); }
+    try { await this.fetchReport(); }
     catch { this.error.set('Không tải được báo cáo. Khoảng ngày tối đa 367 ngày.'); }
     finally { this.loading.set(false); }
+  }
+
+  private async fetchReport(): Promise<void> {
+    const range = `from=${encodeURIComponent(this.reportFrom)}&to=${encodeURIComponent(this.reportTo)}`;
+    const [summary, methods] = await Promise.all([
+      this.api.get<ReportSummary>(`/reports/summary?${range}`),
+      this.api.get<PaymentMethodReport[]>(`/reports/payment-methods?${range}`)
+    ]);
+    this.report.set(summary);
+    this.paymentMethodReport.set(methods);
   }
 }

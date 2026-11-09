@@ -707,6 +707,28 @@ protectedApi.MapGet("/reports/summary", async (ClaimsPrincipal principal, PosDbC
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
 });
 
+protectedApi.MapGet("/reports/payment-methods", async (ClaimsPrincipal principal, PosDbContext db, DateOnly? from, DateOnly? to, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "reports.read", ct)) return Results.Forbid();
+    var zone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+    var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).DateTime);
+    var startDate = from ?? today;
+    var endDate = to ?? today;
+    if (endDate < startDate || endDate.DayNumber - startDate.DayNumber > 366)
+        return Results.BadRequest(new { error = "Khoảng báo cáo phải từ 1 đến 367 ngày." });
+    var start = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(startDate.ToDateTime(TimeOnly.MinValue), zone));
+    var end = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(endDate.AddDays(1).ToDateTime(TimeOnly.MinValue), zone));
+    var received = await db.Payments.AsNoTracking().Where(p => p.ReceivedAt >= start && p.ReceivedAt < end)
+        .GroupBy(p => p.Method).Select(g => new { Method = g.Key, Amount = g.Sum(p => p.Amount) }).ToListAsync(ct);
+    var refunded = await db.SalesReturns.AsNoTracking().Where(r => r.CreatedAt >= start && r.CreatedAt < end)
+        .GroupBy(r => r.RefundMethod).Select(g => new { Method = g.Key, Amount = g.Sum(r => r.RefundAmount) }).ToListAsync(ct);
+    return Results.Ok(Enum.GetValues<PaymentMethod>().Select(method => new {
+        method, received = received.FirstOrDefault(x => x.Method == method)?.Amount ?? 0m,
+        refunded = refunded.FirstOrDefault(x => x.Method == method)?.Amount ?? 0m,
+        net = (received.FirstOrDefault(x => x.Method == method)?.Amount ?? 0m) - (refunded.FirstOrDefault(x => x.Method == method)?.Amount ?? 0m)
+    }));
+});
+
 protectedApi.MapGet("/employees", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
 {
     if (!await IsOwner(principal, db, ct)) return Results.Forbid();

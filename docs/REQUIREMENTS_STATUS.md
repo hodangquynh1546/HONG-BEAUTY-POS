@@ -12,7 +12,7 @@ Kiểm tra trên source ở nhánh `main` ngày 2026-11-09. `training-doc.md` kh
 | POS và thanh toán | Có tạo đơn idempotency, trừ kho, thanh toán từng phần; xem/in hóa đơn từ dữ liệu thật và lưu PDF qua hộp thoại in của trình duyệt | Thiếu kết hợp phương thức ngay trên màn hình POS, QR, xuất PDF tự động, chỉnh/hủy đơn theo quy tắc, thử mất mạng |
 | Trả hàng và hoàn tiền | Có API trả một phần, điều kiện nhập lại kho và số tiền hoàn | Cần kiểm thử luồng tài chính đầy đủ, chứng từ hoàn và UI chi tiết |
 | Khách hàng và nhà cung cấp | Có CRUD/status và tìm khách theo tên/điện thoại/email | Thiếu lịch sử giao dịch/công nợ, phân nhóm, xuất Excel và tìm nhà cung cấp |
-| Thu chi và báo cáo | Có màn ghi/xem thu chi từ database, chống trùng khi gửi lại; summary tách doanh thu, tiền thu, giá vốn và các khoản chi | Thiếu thu công nợ khách, phân loại/đối soát nâng cao, báo cáo ngày/nhân viên/sản phẩm, Excel/PDF |
+| Thu chi và báo cáo | Có màn ghi/xem thu chi từ database, chống trùng khi gửi lại; summary tách doanh thu, tiền thu, giá vốn và các khoản chi; báo cáo thu/hoàn/thực nhận theo phương thức thanh toán | Thiếu thu công nợ khách, phân loại/đối soát nâng cao, báo cáo ngày/nhân viên/sản phẩm, Excel/PDF |
 | Cài đặt, audit, backup | Có audit events và biến môi trường thiết yếu | Thiếu giao diện cấu hình cửa hàng, backup/restore và chính sách lưu dữ liệu lâu dài |
 | Mobile | Có source Android/iOS Capacitor, dùng cùng Angular/API; POS có nút quét camera bằng plugin native | Chưa build APK/IPA hoặc thử quét trên thiết bị; thiếu thông báo và tối ưu một số luồng một tay |
 | Docker, Render, Neon | Có Dockerfile, `docker-compose.yml`, `render.yaml` và hướng dẫn | Docker engine vắng trong môi trường này nên chưa chạy thử Compose; chưa xác minh Render/Neon thật |

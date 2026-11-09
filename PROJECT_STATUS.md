@@ -23,6 +23,7 @@
 - Xem và in hóa đơn từ chi tiết đơn, sản phẩm và các khoản thanh toán trong database; trình duyệt có thể lưu bản in thành PDF. PostgreSQL integration smoke test xác nhận tổng tiền, tiền đã thu, công nợ và dòng hàng. Chưa kiểm tra máy in vật lý hoặc chức năng in trên app native.
 - Giao diện hiển thị trạng thái đơn, phương thức thanh toán và hành động audit bằng tiếng Việt; audit API trả tên người và đối tượng thật thay cho UUID; ngày giờ đổi sang múi giờ Việt Nam. Danh sách sản phẩm và báo cáo hiển thị thêm các trường backend đã có. Build và PostgreSQL integration smoke test đạt; chưa có kiểm thử giao diện tự động cho mọi màn hình.
 - Màn Thu chi dùng API thật: ghi thu khác, chi vận hành, trả nhà cung cấp, chi khác; xem lịch sử kèm tên người ghi; giữ khóa idempotency khi kết nối gián đoạn và không cộng tiền bán hàng lần hai. PostgreSQL integration smoke test xác nhận gửi lại cùng mã không tạo phiếu trùng, doanh thu bán hàng giữ nguyên và dòng tiền cập nhật đúng.
+- Màn Kho hiển thị tổng số lượng tồn, hàng sắp hết/hết hàng và lịch sử nhập, bán, trả, kiểm kho từ database. Lịch sử có tên sản phẩm, người thao tác, tồn trước/sau, lọc sản phẩm và phân trang; API chỉ trả dữ liệu khi có quyền xem kho.
 - Sửa khởi động Render khi chưa có biến `OWNER_*`: dịch vụ ghi cảnh báo và vẫn chạy; khi nhập đủ thông tin hợp lệ rồi triển khai lại thì tạo Chủ sở hữu. PostgreSQL smoke test trên database mới xác nhận `/health` trả 200 trước khi thiết lập, đăng nhập trả 401 trước và 200 sau khi nhập thông tin.
 
 ## Chưa xác minh

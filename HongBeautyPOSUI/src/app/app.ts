@@ -2,7 +2,7 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApiService, type Employee, type AuditEvent, type Product, type StockItem, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
+import { ApiService, type Employee, type AuditEvent, type Product, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
 
 type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit';
 
@@ -28,6 +28,12 @@ export class App implements OnInit {
   readonly selectedEmployeeId = signal('');
   readonly selectedEmployee = computed(() => this.employees().find(e => e.id === this.selectedEmployeeId()) ?? null);
   readonly stock = signal<StockItem[]>([]);
+  readonly stockQuantity = computed(() => this.stock().reduce((total, item) => total + item.quantity, 0));
+  readonly lowStockCount = computed(() => this.stock().filter(item => item.quantity > 0 && item.quantity <= item.reorderLevel).length);
+  readonly outStockCount = computed(() => this.stock().filter(item => item.quantity <= 0).length);
+  readonly stockMovements = signal<StockMovement[]>([]);
+  readonly stockMovementTotal = signal(0);
+  stockMovementProductId = '';
   readonly stocktakes = signal<StocktakeSession[]>([]);
   readonly currentStocktake = signal<StocktakeSession | null>(null);
   readonly purchases = signal<PurchaseReceipt[]>([]);
@@ -198,6 +204,7 @@ export class App implements OnInit {
       if (this.api.can('suppliers.read')) this.suppliers.set(await this.api.get<Supplier[]>('/suppliers'));
       if (this.api.can('inventory.read')) {
         this.stock.set(await this.api.get<StockItem[]>('/stock'));
+        await this.loadStockMovements(true);
         this.stocktakes.set(await this.api.get<StocktakeSession[]>('/stocktakes'));
       }
       if (this.api.can('purchases.read')) this.purchases.set(await this.api.get<PurchaseReceipt[]>('/purchases'));
@@ -588,6 +595,25 @@ export class App implements OnInit {
 
   cashKindLabel(kind: string): string {
     return ({ OtherIncome: 'Thu khác', OperatingExpense: 'Chi vận hành', SupplierPayment: 'Thanh toán nhà cung cấp', OtherExpense: 'Chi khác' } as Record<string, string>)[kind] ?? 'Giao dịch khác';
+  }
+
+  stockMovementTypeLabel(type: string): string {
+    return ({ PURCHASE: 'Nhập hàng', SALE: 'Bán hàng', RETURN: 'Trả hàng', ADJUSTMENT: 'Điều chỉnh kho', STOCKTAKE: 'Kiểm kho' } as Record<string, string>)[type] ?? 'Biến động kho';
+  }
+
+  private async loadStockMovements(reset: boolean): Promise<void> {
+    const params = new URLSearchParams({ skip: String(reset ? 0 : this.stockMovements().length), take: '50' });
+    if (this.stockMovementProductId) params.set('productId', this.stockMovementProductId);
+    const result = await this.api.get<{ items: StockMovement[]; total: number }>(`/stock/movements?${params}`);
+    this.stockMovements.set(reset ? result.items : [...this.stockMovements(), ...result.items]);
+    this.stockMovementTotal.set(result.total);
+  }
+
+  async searchStockMovements(reset = true): Promise<void> {
+    this.loading.set(true); this.error.set('');
+    try { await this.loadStockMovements(reset); }
+    catch { this.error.set('Không tải được lịch sử kho. Vui lòng thử lại.'); }
+    finally { this.loading.set(false); }
   }
 
   async saveCashEntry(): Promise<void> {

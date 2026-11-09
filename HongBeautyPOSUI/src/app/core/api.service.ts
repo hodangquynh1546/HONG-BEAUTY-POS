@@ -11,6 +11,7 @@ export interface Supplier { id: string; code: string; name: string; phone: strin
 export interface Employee { id: string; email: string; fullName: string; active: boolean; permissions: string[]; }
 export interface AuditEvent { id: string; actorId: string; actorName: string; action: string; subjectId: string; subjectName: string; createdAt: string; }
 export interface StockItem { productId: string; sku: string; name: string; quantity: number; reorderLevel: number; }
+export interface StockMovement { id: string; productId: string; productName: string; performerName: string; type: string; delta: number; before: number; after: number; reason: string; createdAt: string; }
 export interface StocktakeLine { id: string; productId: string; sku: string; name: string; expectedQuantity: number; actualQuantity: number | null; }
 export interface StocktakeSession { id: string; status: 'Draft' | 'Completed'; createdAt: string; completedAt: string | null; items: StocktakeLine[]; }
 export interface PurchaseReceipt { id: string; receiptNo: string; supplierId: string | null; status: 'Draft' | 'Completed' | 'Cancelled'; total: number; createdAt: string; }

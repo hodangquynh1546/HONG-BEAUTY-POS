@@ -50,6 +50,11 @@ try:
     token = employee_auth['accessToken']
     call('GET','/api/v1/products')
     try:
+        call('GET','/api/v1/stock/movements')
+        raise AssertionError('Employee without inventory.read viewed stock movements')
+    except RuntimeError as error:
+        assert 'HTTP 403' in str(error), error
+    try:
         call('POST','/api/v1/products',{'sku':'DENIED','name':'Denied','salePrice':1,'costPrice':1})
         raise AssertionError('Employee unexpectedly created a product')
     except RuntimeError as error:
@@ -167,6 +172,21 @@ try:
     call('POST',f"/api/v1/stocktakes/{take['id']}/complete",{})
     _, stock=call('GET','/api/v1/stock')
     assert next(x for x in stock if x['productId']==pid)['quantity']==8
+    _, movements = call('GET',f'/api/v1/stock/movements?productId={pid}&skip=0&take=2')
+    assert movements['total'] == 4 and len(movements['items']) == 2, movements
+    assert movements['items'][0]['productName'] == 'Updated lipstick'
+    assert movements['items'][0]['performerName'] == 'Test Owner'
+    assert movements['items'][0]['type'] == 'STOCKTAKE'
+    assert movements['items'][0]['reason'] == 'Kiểm kho'
+    assert movements['items'][0]['before'] == 9 and movements['items'][0]['after'] == 8
+    _, next_movements = call('GET',f'/api/v1/stock/movements?productId={pid}&skip=2&take=2')
+    assert next_movements['total'] == 4 and len(next_movements['items']) == 2
+    assert {x['type'] for x in movements['items'] + next_movements['items']} == {'PURCHASE','SALE','RETURN','STOCKTAKE'}
+    try:
+        call('GET','/api/v1/stock/movements?take=101')
+        raise AssertionError('Stock movements accepted an oversized page')
+    except RuntimeError as error:
+        assert 'HTTP 400' in str(error), error
     _, report=call('GET','/api/v1/reports/summary')
     assert report['grossSales']==200, report
     assert report['returnedSales']==100, report

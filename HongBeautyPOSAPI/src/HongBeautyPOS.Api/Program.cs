@@ -445,14 +445,28 @@ protectedApi.MapPost("/stock/adjustments", async (ClaimsPrincipal principal, Pos
     }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
 });
-protectedApi.MapGet("/stock/movements", async (ClaimsPrincipal principal, PosDbContext db, Guid? productId, CancellationToken ct) =>
+protectedApi.MapGet("/stock/movements", async (ClaimsPrincipal principal, PosDbContext db, Guid? productId, int? skip, int? take, CancellationToken ct) =>
 {
     if (!await HasPermission(principal, db, "inventory.read", ct)) return Results.Forbid();
+    var offset = skip ?? 0;
+    var pageSize = take ?? 50;
+    if (offset < 0 || pageSize is < 1 or > 100) return Results.BadRequest(new { error = "Phân trang không hợp lệ" });
     var query = db.StockMovements.AsNoTracking().AsQueryable();
     if (productId.HasValue) query = query.Where(m => m.ProductId == productId.Value);
-    return Results.Ok(await query.OrderByDescending(m => m.CreatedAt).Take(100)
-        .Select(m => new { m.Id, m.ProductId, m.Type, m.Delta, m.Before, m.After, m.Reason, m.CreatedAt })
-        .ToListAsync(ct));
+    var total = await query.CountAsync(ct);
+    var rows = await query.OrderByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id)
+        .Skip(offset).Take(pageSize).ToListAsync(ct);
+    var productIds = rows.Select(m => m.ProductId).Distinct().ToArray();
+    var actorIds = rows.Select(m => m.PerformedBy).Distinct().ToArray();
+    var products = await db.Products.AsNoTracking().Where(p => productIds.Contains(p.Id))
+        .ToDictionaryAsync(p => p.Id, p => p.Name, ct);
+    var users = await db.Users.AsNoTracking().Where(u => actorIds.Contains(u.Id))
+        .ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+    return Results.Ok(new { items = rows.Select(m => new { m.Id, m.ProductId,
+        ProductName = products.GetValueOrDefault(m.ProductId, "Sản phẩm không còn sử dụng"),
+        PerformerName = users.GetValueOrDefault(m.PerformedBy, "Người dùng đã ngừng hoạt động"),
+        m.Type, m.Delta, m.Before, m.After,
+        Reason = m.Type == "STOCKTAKE" ? "Kiểm kho" : m.Reason, m.CreatedAt }), total });
 });
 
 protectedApi.MapGet("/stocktakes", async (ClaimsPrincipal principal, PosDbContext db, StocktakeService stocktakes, CancellationToken ct) =>

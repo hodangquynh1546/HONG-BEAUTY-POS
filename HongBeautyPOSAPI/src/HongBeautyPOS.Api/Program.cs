@@ -501,6 +501,49 @@ protectedApi.MapGet("/orders", async (ClaimsPrincipal principal, PosDbContext db
     if (!await HasPermission(principal, db, "sales.read", ct)) return Results.Forbid();
     return Results.Ok(await sales.ListAsync(ct));
 });
+protectedApi.MapGet("/orders/search", async (ClaimsPrincipal principal, PosDbContext db,
+    string? q, string? status, DateOnly? from, DateOnly? to, Guid? sellerId, int? skip, int? take, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "sales.read", ct)) return Results.Forbid();
+    var offset = skip ?? 0;
+    var pageSize = take ?? 50;
+    var term = q?.Trim();
+    if (offset < 0 || pageSize is < 1 or > 100 || term?.Length > 100 ||
+        (from.HasValue && to.HasValue && from > to) || to == DateOnly.MaxValue)
+        return Results.BadRequest(new { error = "Bộ lọc đơn hàng không hợp lệ" });
+    SaleStatus? parsedStatus = null;
+    if (!string.IsNullOrWhiteSpace(status))
+    {
+        if (!Enum.TryParse<SaleStatus>(status, true, out var value) || !Enum.IsDefined(value))
+            return Results.BadRequest(new { error = "Trạng thái đơn hàng không hợp lệ" });
+        parsedStatus = value;
+    }
+    if (sellerId.HasValue && !await IsOwner(principal, db, ct)) return Results.Forbid();
+    var query = db.SalesOrders.AsNoTracking().AsQueryable();
+    if (!string.IsNullOrEmpty(term))
+    {
+        var pattern = "%" + term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+        query = query.Where(o => EF.Functions.ILike(o.OrderNo, pattern, "\\"));
+    }
+    if (parsedStatus.HasValue) query = query.Where(o => o.Status == parsedStatus.Value);
+    if (sellerId.HasValue) query = query.Where(o => o.SoldBy == sellerId.Value);
+    if (from.HasValue)
+    {
+        var startUtc = new DateTimeOffset(from.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
+        query = query.Where(o => o.CreatedAt >= startUtc);
+    }
+    if (to.HasValue)
+    {
+        var endUtc = new DateTimeOffset(to.Value.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
+        query = query.Where(o => o.CreatedAt < endUtc);
+    }
+    var total = await query.CountAsync(ct);
+    var rows = await query.OrderByDescending(o => o.CreatedAt).ThenByDescending(o => o.Id)
+        .Skip(offset).Take(pageSize).ToListAsync(ct);
+    var items = rows.Select(o => new SalesOrderDto(o.Id, o.OrderNo, o.CustomerId, o.Status.ToString(),
+        o.Total, o.PaidTotal, o.CreatedAt, o.ReturnedTotal, o.RefundedTotal));
+    return Results.Ok(new { items, total });
+});
 protectedApi.MapPost("/orders", async (ClaimsPrincipal principal, PosDbContext db, SalesService sales, CreateSaleRequest request, CancellationToken ct) =>
 {
     if (!await HasPermission(principal, db, "sales.write", ct)) return Results.Forbid();

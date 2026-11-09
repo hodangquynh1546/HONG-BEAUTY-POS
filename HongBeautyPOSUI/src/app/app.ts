@@ -30,6 +30,7 @@ export class App implements OnInit {
   readonly currentStocktake = signal<StocktakeSession | null>(null);
   readonly purchases = signal<PurchaseReceipt[]>([]);
   readonly orders = signal<SalesOrder[]>([]);
+  readonly orderTotal = signal(0);
   readonly report = signal<ReportSummary | null>(null);
   readonly returnLines = signal<OrderLine[]>([]);
   readonly cart = signal<Record<string, number>>(JSON.parse(sessionStorage.getItem('hbpos_cart') || '{}'));
@@ -49,6 +50,11 @@ export class App implements OnInit {
   editingCustomerId = '';
   customerSearch = '';
   posCustomerSearch = '';
+  orderSearch = '';
+  orderStatus = '';
+  orderFrom = '';
+  orderTo = '';
+  orderSellerId = '';
   newSupplier = { code: '', name: '', phone: '', email: '' };
   editingSupplierId = '';
   newEmployee = { email: '', fullName: '', password: '' };
@@ -114,6 +120,25 @@ export class App implements OnInit {
     finally { this.loading.set(false); }
   }
 
+  private async loadOrders(reset: boolean): Promise<void> {
+    const params = new URLSearchParams({ skip: String(reset ? 0 : this.orders().length), take: '50' });
+    if (this.orderSearch.trim()) params.set('q', this.orderSearch.trim());
+    if (this.orderStatus) params.set('status', this.orderStatus);
+    if (this.orderFrom) params.set('from', this.orderFrom);
+    if (this.orderTo) params.set('to', this.orderTo);
+    if (this.orderSellerId) params.set('sellerId', this.orderSellerId);
+    const result = await this.api.get<{ items: SalesOrder[]; total: number }>(`/orders/search?${params}`);
+    this.orders.set(reset ? result.items : [...this.orders(), ...result.items]);
+    this.orderTotal.set(result.total);
+  }
+
+  async searchOrders(reset = true): Promise<void> {
+    this.loading.set(true); this.error.set('');
+    try { await this.loadOrders(reset); }
+    catch { this.error.set('Không tìm được đơn hàng. Vui lòng kiểm tra bộ lọc và thử lại.'); }
+    finally { this.loading.set(false); }
+  }
+
   async login(): Promise<void> {
     this.loading.set(true); this.error.set('');
     try {
@@ -142,7 +167,7 @@ export class App implements OnInit {
       }
       if (this.api.can('purchases.read')) this.purchases.set(await this.api.get<PurchaseReceipt[]>('/purchases'));
       if (this.api.can('sales.read')) {
-        this.orders.set(await this.api.get<SalesOrder[]>('/orders'));
+        await this.loadOrders(true);
         const pending = this.orders().find(o => o.id === this.pendingOrderId);
         if (pending) this.paymentAmount = Math.max(0, pending.total - pending.paidTotal);
       }

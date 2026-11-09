@@ -23,7 +23,7 @@ public sealed class SalesService(ISalesRepository repository)
 			bool flag3 = ((num < 1 || num > 100) ? true : false);
 			flag2 = flag3;
 		}
-		if (flag2 || request.Items.Any((SaleLineRequest i) => i.ProductId == Guid.Empty || i.Quantity <= 0m) || request.Items.Select((SaleLineRequest i) => i.ProductId).Distinct().Count() != request.Items.Length)
+		if (flag2 || request.Items.Any((SaleLineRequest i) => i.ProductId == Guid.Empty || i.Quantity <= 0m || i.DiscountPercent < 0m || i.DiscountPercent > 100m || decimal.Round(i.DiscountPercent, 2) != i.DiscountPercent) || request.Items.Select((SaleLineRequest i) => i.ProductId).Distinct().Count() != request.Items.Length)
 		{
 			throw new ArgumentException("Giỏ hàng không hợp lệ.");
 		}

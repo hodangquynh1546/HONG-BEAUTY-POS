@@ -17,6 +17,8 @@ public sealed class SalesOrderItem
 	public decimal Quantity { get; set; }
 
 	public decimal UnitPrice { get; set; }
+	public decimal DiscountPercent { get; set; }
+	public decimal DiscountAmount { get; set; }
 
 	public decimal UnitCost { get; set; }
 }

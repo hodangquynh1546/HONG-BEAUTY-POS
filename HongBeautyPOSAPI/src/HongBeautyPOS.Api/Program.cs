@@ -760,11 +760,13 @@ protectedApi.MapGet("/orders/{id:guid}/receipt", async (ClaimsPrincipal principa
         : null;
     var sellerName = await db.Users.AsNoTracking().Where(u => u.Id == order.SoldBy).Select(u => u.FullName).SingleOrDefaultAsync(ct);
     var items = await db.SalesOrderItems.AsNoTracking().Where(i => i.OrderId == id).OrderBy(i => i.NameSnapshot)
-        .Select(i => new { i.SkuSnapshot, i.NameSnapshot, i.Quantity, i.UnitPrice, LineTotal = i.Quantity * i.UnitPrice }).ToListAsync(ct);
+        .Select(i => new { i.SkuSnapshot, i.NameSnapshot, i.Quantity, i.UnitPrice, i.DiscountPercent, i.DiscountAmount,
+            LineTotal = i.Quantity * i.UnitPrice - i.DiscountAmount }).ToListAsync(ct);
     var payments = await db.Payments.AsNoTracking().Where(p => p.OrderId == id).OrderBy(p => p.ReceivedAt)
         .Select(p => new { p.Method, p.Amount, p.ReceivedAt }).ToListAsync(ct);
     return Results.Ok(new { order.Id, order.OrderNo, order.CreatedAt, Status = order.Status.ToString(),
         CustomerName = customerName ?? "Khách lẻ", SellerName = sellerName ?? "—", order.Subtotal, order.Discount,
+        OrderDiscount = order.Discount - items.Sum(i => i.DiscountAmount),
         order.Total, order.PaidTotal, order.ReturnedTotal, order.RefundedTotal,
         RemainingDebt = Math.Max(0, order.Total - order.ReturnedTotal - order.PaidTotal + order.RefundedTotal),
         Items = items, Payments = payments });

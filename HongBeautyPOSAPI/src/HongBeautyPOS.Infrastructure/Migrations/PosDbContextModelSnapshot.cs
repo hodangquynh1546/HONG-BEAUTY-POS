@@ -548,6 +548,14 @@ namespace HongBeautyPOS.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("DiscountPercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<string>("NameSnapshot")
                         .IsRequired()
                         .HasMaxLength(240)
@@ -585,6 +593,8 @@ namespace HongBeautyPOS.Infrastructure.Migrations
 
                     b.ToTable("sales_order_items", null, t =>
                         {
+                            t.HasCheckConstraint("CK_sales_order_items_discount", "\"DiscountPercent\" >= 0 AND \"DiscountPercent\" <= 100 AND \"DiscountAmount\" >= 0");
+
                             t.HasCheckConstraint("CK_sales_order_items_quantity", "\"Quantity\" > 0");
                         });
                 });

@@ -319,6 +319,18 @@ try:
     _, discounted_stock = call('GET','/api/v1/stock')
     assert next(x for x in discounted_stock if x['productId']==pid)['quantity'] == 6
     print('PASS: percentage discount amount, payment, receipt, stock and idempotency')
+    _, line_discount_order = call('POST','/api/v1/orders',{'idempotencyKey':str(__import__('uuid').uuid4()),'customerId':customer['id'],'discount':10,'items':[{'productId':pid,'quantity':1,'discountPercent':20},{'productId':zero_id,'quantity':1,'discountPercent':0}]})
+    assert line_discount_order['total'] == 170, line_discount_order
+    call('POST',f"/api/v1/orders/{line_discount_order['id']}/payments",{'idempotencyKey':str(__import__('uuid').uuid4()),'method':'Cash','amount':170})
+    _, line_discount_receipt = call('GET',f"/api/v1/orders/{line_discount_order['id']}/receipt")
+    assert line_discount_receipt['subtotal'] == 200 and line_discount_receipt['discount'] == 30 and line_discount_receipt['orderDiscount'] == 10 and line_discount_receipt['total'] == 170
+    discounted_line = next(x for x in line_discount_receipt['items'] if x['skuSnapshot'] == product['sku'])
+    assert discounted_line['discountPercent'] == 20 and discounted_line['discountAmount'] == 20 and discounted_line['lineTotal'] == 80
+    _, line_discount_items = call('GET',f"/api/v1/orders/{line_discount_order['id']}/items")
+    discounted_item = next(x for x in line_discount_items if x['productId'] == pid)
+    _, line_discount_return = call('POST',f"/api/v1/orders/{line_discount_order['id']}/returns",{'idempotencyKey':str(__import__('uuid').uuid4()),'reason':'Trả sản phẩm giảm giá','refundAmount':75.56,'refundMethod':'Cash','items':[{'orderItemId':discounted_item['id'],'quantity':1,'restock':True}]})
+    assert line_discount_return['total'] == 75.56 and line_discount_return['refundAmount'] == 75.56
+    print('PASS: per-product discount, receipt and proportionate return')
     print('PASS: report balances')
     print('PASS: self profile, password change, and owner recovery')
     print('PASS: shared-IP login allowance and guarded stock adjustment')

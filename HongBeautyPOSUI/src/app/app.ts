@@ -84,11 +84,14 @@ export class App implements OnInit {
   readonly cashScale = computed(() => Math.max(1, ...this.chartPoints().flatMap(point => [point.cashIn, point.cashOut])));
   readonly returnLines = signal<OrderLine[]>([]);
   readonly cart = signal<Record<string, number>>(JSON.parse(sessionStorage.getItem('hbpos_cart') || '{}'));
+  readonly lineDiscountPercents = signal<Record<string, number>>(JSON.parse(sessionStorage.getItem('hbpos_line_discounts') || '{}'));
+  readonly discountEditorProductId = signal('');
   readonly cartItems = computed(() => this.products().filter(p => (this.cart()[p.id] || 0) > 0));
   readonly cartTotal = computed(() => this.cartItems().reduce((total, p) => total + p.salePrice * this.cart()[p.id], 0));
-  readonly discountPercent = signal(0);
-  readonly discountAmount = computed(() => Math.round(this.cartTotal() * this.discountPercent() / 100));
-  readonly payableTotal = computed(() => this.cartTotal() - this.discountAmount());
+  readonly lineDiscountTotal = computed(() => this.cartItems().reduce((total, p) => total + Math.round(p.salePrice * this.cart()[p.id] * (this.lineDiscountPercents()[p.id] || 0) / 100), 0));
+  readonly discountPercent = signal(Number(sessionStorage.getItem('hbpos_order_discount') || 0));
+  readonly discountAmount = computed(() => Math.round((this.cartTotal() - this.lineDiscountTotal()) * this.discountPercent() / 100));
+  readonly payableTotal = computed(() => this.cartTotal() - this.lineDiscountTotal() - this.discountAmount());
   readonly loading = signal(false);
   readonly error = signal('');
   readonly notice = signal('');
@@ -778,18 +781,36 @@ export class App implements OnInit {
     const quantity = Math.max(0, Math.min(product.quantity, (this.cart()[productId] || 0) + delta));
     this.cart.update(old => ({ ...old, [productId]: quantity }));
     sessionStorage.setItem('hbpos_cart', JSON.stringify(this.cart()));
+    if (quantity === 0) {
+      this.lineDiscountPercents.update(old => { const next = { ...old }; delete next[productId]; return next; });
+      sessionStorage.setItem('hbpos_line_discounts', JSON.stringify(this.lineDiscountPercents()));
+      if (this.discountEditorProductId() === productId) this.discountEditorProductId.set('');
+    }
+    this.paymentAmount = this.payableTotal();
+  }
+
+  lineDiscountValue(product: Product): number {
+    return Math.round(product.salePrice * (this.cart()[product.id] || 0) * (this.lineDiscountPercents()[product.id] || 0) / 100);
+  }
+
+  updateLineDiscount(productId: string, value: number): void {
+    if (this.pendingOrderId || sessionStorage.getItem('hbpos_checkout_key')) return;
+    const percent = Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Math.round(Number(value) * 100) / 100)) : 0;
+    this.lineDiscountPercents.update(old => ({ ...old, [productId]: percent }));
+    sessionStorage.setItem('hbpos_line_discounts', JSON.stringify(this.lineDiscountPercents()));
     this.paymentAmount = this.payableTotal();
   }
 
   updateDiscountPercent(value: number): void {
     this.discountPercent.set(Number.isFinite(Number(value)) ? Math.max(0, Math.min(100, Number(value))) : 0);
+    sessionStorage.setItem('hbpos_order_discount', String(this.discountPercent()));
     if (!this.pendingOrderId) this.paymentAmount = this.payableTotal();
   }
 
   async checkout(): Promise<void> {
     if (!this.cartItems().length && !this.pendingOrderId) return;
     if (!Number.isFinite(this.discountPercent()) || this.discountPercent() < 0 || this.discountPercent() > 100) { this.error.set('Giảm giá phải từ 0% đến 100%.'); return; }
-    if (!this.pendingOrderId && !await this.askConfirmation(`Tạo đơn ${this.payableTotal().toLocaleString('vi-VN')} đ sau giảm giá ${this.discountPercent()}% và ghi nhận ${this.paymentAmount.toLocaleString('vi-VN')} đ thanh toán?`, 'Tạo đơn')) return;
+    if (!this.pendingOrderId && !await this.askConfirmation(`Tạo đơn ${this.payableTotal().toLocaleString('vi-VN')} đ sau giảm giá sản phẩm ${this.lineDiscountTotal().toLocaleString('vi-VN')} đ và giảm toàn đơn ${this.discountAmount().toLocaleString('vi-VN')} đ; ghi nhận ${this.paymentAmount.toLocaleString('vi-VN')} đ thanh toán?`, 'Tạo đơn')) return;
     this.loading.set(true); this.error.set('');
     try {
       if (!this.pendingOrderId) {
@@ -799,7 +820,7 @@ export class App implements OnInit {
           idempotencyKey: key,
           customerId: this.selectedCustomerId || null,
           discount: this.discountAmount(),
-          items: this.cartItems().map(p => ({ productId: p.id, quantity: this.cart()[p.id] }))
+          items: this.cartItems().map(p => ({ productId: p.id, quantity: this.cart()[p.id], discountPercent: this.lineDiscountPercents()[p.id] || 0 }))
         });
         this.pendingOrderId = order.id;
         sessionStorage.setItem('hbpos_pending_order', order.id);
@@ -813,10 +834,12 @@ export class App implements OnInit {
       }
       this.pendingOrderId = null;
       this.cart.set({});
+      this.lineDiscountPercents.set({});
+      this.discountEditorProductId.set('');
       this.discountPercent.set(0);
       this.selectedCustomerId = '';
       this.paymentAmount = 0;
-      for (const key of ['hbpos_cart', 'hbpos_checkout_key', 'hbpos_pending_order', 'hbpos_payment_key']) sessionStorage.removeItem(key);
+      for (const key of ['hbpos_cart', 'hbpos_line_discounts', 'hbpos_order_discount', 'hbpos_checkout_key', 'hbpos_pending_order', 'hbpos_payment_key']) sessionStorage.removeItem(key);
       this.page.set('orders');
       this.notice.set('Đã ghi nhận đơn bán hàng');
       await this.refresh();

@@ -280,6 +280,7 @@ public sealed class PosDbContext : DbContext
 			e.ToTable("sales_order_items", (TableBuilder<SalesOrderItem> table) =>
 			{
 				table.HasCheckConstraint("CK_sales_order_items_quantity", "\"Quantity\" > 0");
+				table.HasCheckConstraint("CK_sales_order_items_discount", "\"DiscountPercent\" >= 0 AND \"DiscountPercent\" <= 100 AND \"DiscountAmount\" >= 0");
 			});
 			e.HasKey((SalesOrderItem x) => x.Id);
 			e.HasIndex((SalesOrderItem x) => new { x.OrderId, x.ProductId }).IsUnique();
@@ -287,6 +288,8 @@ public sealed class PosDbContext : DbContext
 			e.Property((SalesOrderItem x) => x.NameSnapshot).HasMaxLength(240);
 			e.Property((SalesOrderItem x) => x.Quantity).HasPrecision(18, 3);
 			e.Property((SalesOrderItem x) => x.UnitPrice).HasPrecision(18, 2);
+			e.Property((SalesOrderItem x) => x.DiscountPercent).HasPrecision(5, 2);
+			e.Property((SalesOrderItem x) => x.DiscountAmount).HasPrecision(18, 2);
 			e.Property((SalesOrderItem x) => x.UnitCost).HasPrecision(18, 2);
 			e.HasOne<Product>().WithMany().HasForeignKey((SalesOrderItem x) => x.ProductId)
 				.OnDelete(DeleteBehavior.Restrict);

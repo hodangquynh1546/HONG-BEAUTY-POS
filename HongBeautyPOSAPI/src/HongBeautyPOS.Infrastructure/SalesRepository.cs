@@ -43,11 +43,12 @@ public sealed class SalesRepository(PosDbContext db) : ISalesRepository
 				}
 				Dictionary<Guid, Product> byId = products.ToDictionary((Product p) => p.Id);
 				decimal subtotal = request.Items.Sum((SaleLineRequest i) => i.Quantity * byId[i.ProductId].SalePrice);
-				if (request.Discount > subtotal)
+				decimal lineDiscount = request.Items.Sum(i => decimal.Round(i.Quantity * byId[i.ProductId].SalePrice * i.DiscountPercent / 100m, 0, MidpointRounding.AwayFromZero));
+				if (request.Discount > subtotal - lineDiscount)
 				{
 					throw new ArgumentException("Chiết khấu vượt tổng tiền hàng.");
 				}
-				decimal total = subtotal - request.Discount;
+				decimal total = subtotal - lineDiscount - request.Discount;
 				SalesOrder order = new SalesOrder
 				{
 					OrderNo = $"BH-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}".Substring(0, 32),
@@ -55,7 +56,7 @@ public sealed class SalesRepository(PosDbContext db) : ISalesRepository
 					CustomerId = request.CustomerId,
 					SoldBy = actorId,
 					Subtotal = subtotal,
-					Discount = request.Discount,
+					Discount = lineDiscount + request.Discount,
 					Total = total,
 					Status = ((total == 0m) ? SaleStatus.Paid : SaleStatus.Unpaid),
 					Items = request.Items.Select((SaleLineRequest i) =>
@@ -68,6 +69,8 @@ public sealed class SalesRepository(PosDbContext db) : ISalesRepository
 							NameSnapshot = product.Name,
 							Quantity = i.Quantity,
 							UnitPrice = product.SalePrice,
+							DiscountPercent = i.DiscountPercent,
+							DiscountAmount = decimal.Round(i.Quantity * product.SalePrice * i.DiscountPercent / 100m, 0, MidpointRounding.AwayFromZero),
 							UnitCost = product.CostPrice
 						};
 					}).ToList()

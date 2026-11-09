@@ -84,7 +84,8 @@ public sealed class ReturnRepository(PosDbContext db) : IReturnRepository
 					}
 					line = null;
 				}
-				decimal factor = ((order.Subtotal == 0m) ? 0m : (order.Total / order.Subtotal));
+				decimal afterLineDiscounts = order.Subtotal - sold.Sum(i => i.DiscountAmount);
+				decimal factor = afterLineDiscounts == 0m ? 0m : order.Total / afterLineDiscounts;
 				List<SalesReturnItem> lines = request.Items.Select((ReturnLineRequest i) =>
 				{
 					SalesOrderItem salesOrderItem = soldById[i.OrderItemId];
@@ -93,7 +94,7 @@ public sealed class ReturnRepository(PosDbContext db) : IReturnRepository
 						OrderItemId = i.OrderItemId,
 						Quantity = i.Quantity,
 						Restock = i.Restock,
-						Amount = decimal.Round(i.Quantity * salesOrderItem.UnitPrice * factor, 2, MidpointRounding.AwayFromZero)
+						Amount = decimal.Round(i.Quantity * (salesOrderItem.UnitPrice - salesOrderItem.DiscountAmount / salesOrderItem.Quantity) * factor, 2, MidpointRounding.AwayFromZero)
 					};
 				}).ToList();
 				decimal remainingValue = order.Total - order.ReturnedTotal;

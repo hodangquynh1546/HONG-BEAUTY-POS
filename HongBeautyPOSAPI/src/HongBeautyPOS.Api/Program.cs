@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
+using NpgsqlTypes;
 
 var builder = WebApplication.CreateBuilder(args);
 var connection = DatabaseConnection.Normalize(Environment.GetEnvironmentVariable("DATABASE_URL") ?? string.Empty);
@@ -811,6 +813,65 @@ protectedApi.MapGet("/reports/top-products", async (ClaimsPrincipal principal, P
     }).OrderByDescending(x => x.netQuantity).ThenBy(x => x.productName).Take(10));
 });
 
+protectedApi.MapGet("/reports/daily", async (ClaimsPrincipal principal, PosDbContext db, DateOnly? from, DateOnly? to, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "reports.read", ct)) return Results.Forbid();
+    var zone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+    var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone).DateTime);
+    var startDate = from ?? today;
+    var endDate = to ?? today;
+    if (endDate < startDate || endDate.DayNumber - startDate.DayNumber > 366)
+        return Results.BadRequest(new { error = "Khoảng báo cáo phải từ 1 đến 367 ngày." });
+    var start = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(startDate.ToDateTime(TimeOnly.MinValue), zone));
+    var end = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(endDate.AddDays(1).ToDateTime(TimeOnly.MinValue), zone));
+    await using var connection = new NpgsqlConnection(db.Database.GetConnectionString());
+    await connection.OpenAsync(ct);
+    await using var command = new NpgsqlCommand("""
+        WITH events AS (
+          SELECT ("CreatedAt" AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS day,
+                 "Total" AS gross, 0::numeric AS returned, 0::numeric AS received,
+                 0::numeric AS refunded, 0::numeric AS other_income, 0::numeric AS expenses
+          FROM sales_orders WHERE "CreatedAt" >= @start_utc AND "CreatedAt" < @end_utc AND "Status" <> 'Cancelled'
+          UNION ALL
+          SELECT ("CreatedAt" AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, 0, "Total", 0, "RefundAmount", 0, 0
+          FROM sales_returns WHERE "CreatedAt" >= @start_utc AND "CreatedAt" < @end_utc
+          UNION ALL
+          SELECT ("ReceivedAt" AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, 0, 0, "Amount", 0, 0, 0
+          FROM payments WHERE "ReceivedAt" >= @start_utc AND "ReceivedAt" < @end_utc
+          UNION ALL
+          SELECT ("CreatedAt" AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, 0, 0, 0, 0,
+                 CASE WHEN "Kind" = 'OtherIncome' THEN "Amount" ELSE 0 END,
+                 CASE WHEN "Kind" <> 'OtherIncome' THEN "Amount" ELSE 0 END
+          FROM cash_entries WHERE "CreatedAt" >= @start_utc AND "CreatedAt" < @end_utc
+        )
+        SELECT days.day, COALESCE(SUM(events.gross), 0), COALESCE(SUM(events.returned), 0),
+               COALESCE(SUM(events.received), 0), COALESCE(SUM(events.refunded), 0),
+               COALESCE(SUM(events.other_income), 0), COALESCE(SUM(events.expenses), 0)
+        FROM generate_series(@from_date::timestamp, @to_date::timestamp, interval '1 day') AS days(day)
+        LEFT JOIN events ON events.day = days.day::date
+        GROUP BY days.day ORDER BY days.day
+        """, connection);
+    command.Parameters.Add(new NpgsqlParameter("from_date", NpgsqlDbType.Date) { Value = startDate });
+    command.Parameters.Add(new NpgsqlParameter("to_date", NpgsqlDbType.Date) { Value = endDate });
+    command.Parameters.Add(new NpgsqlParameter("start_utc", NpgsqlDbType.TimestampTz) { Value = start });
+    command.Parameters.Add(new NpgsqlParameter("end_utc", NpgsqlDbType.TimestampTz) { Value = end });
+    var points = new List<DailyReportPoint>();
+    await using var reader = await command.ExecuteReaderAsync(ct);
+    while (await reader.ReadAsync(ct))
+    {
+        var gross = reader.GetDecimal(1);
+        var returned = reader.GetDecimal(2);
+        var received = reader.GetDecimal(3);
+        var refunded = reader.GetDecimal(4);
+        var otherIncome = reader.GetDecimal(5);
+        var expenses = reader.GetDecimal(6);
+        points.Add(new DailyReportPoint(DateOnly.FromDateTime(reader.GetDateTime(0)), gross, returned,
+            gross - returned, received + otherIncome, refunded + expenses,
+            received + otherIncome - refunded - expenses));
+    }
+    return Results.Ok(points);
+});
+
 protectedApi.MapGet("/employees", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
 {
     if (!await IsOwner(principal, db, ct)) return Results.Forbid();
@@ -941,6 +1002,8 @@ static async Task<bool> IsOwner(ClaimsPrincipal principal, PosDbContext db, Canc
 sealed record LoginRequest(string Email, string Password);
 sealed record UpdateProfileRequest(string FullName);
 sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+sealed record DailyReportPoint(DateOnly Date, decimal GrossSales, decimal ReturnedSales, decimal NetRevenue,
+    decimal CashIn, decimal CashOut, decimal NetCashFlow);
 sealed record CreateEmployeeRequest(string Email, string FullName, string Password, string[]? Permissions);
 sealed record ReplacePermissionsRequest(string[]? Permissions);
 sealed record SetEmployeeStatusRequest(bool Active);

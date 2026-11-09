@@ -22,6 +22,7 @@ export interface CashEntry { id: string; kind: string; method: string; amount: n
 export interface ReportSummary { from: string; to: string; grossSales: number; returnedSales: number; netRevenue: number; cashReceived: number; cashRefunded: number; netCashFlow: number; costOfGoods: number; estimatedGrossProfit: number; inventoryValue: number; orderCount: number; unitsSold: number; lowStockProducts: number; outOfStockProducts: number; otherIncome: number; operatingExpenses: number; supplierPayments: number; otherExpenses: number; estimatedNetProfit: number; }
 export interface PaymentMethodReport { method: 'Cash' | 'BankTransfer' | 'QrBanking'; received: number; refunded: number; net: number; }
 export interface TopProductReport { productId: string; productName: string; soldQuantity: number; returnedQuantity: number; netQuantity: number; }
+export interface DailyReportPoint { date: string; grossSales: number; returnedSales: number; netRevenue: number; cashIn: number; cashOut: number; netCashFlow: number; }
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {

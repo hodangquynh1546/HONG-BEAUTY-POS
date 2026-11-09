@@ -65,6 +65,11 @@ try:
     except RuntimeError as error:
         assert 'HTTP 403' in str(error), error
     try:
+        call('GET','/api/v1/reports/daily')
+        raise AssertionError('Employee without reports.read viewed daily report')
+    except RuntimeError as error:
+        assert 'HTTP 403' in str(error), error
+    try:
         call('POST','/api/v1/products',{'sku':'DENIED','name':'Denied','salePrice':1,'costPrice':1})
         raise AssertionError('Employee unexpectedly created a product')
     except RuntimeError as error:
@@ -221,6 +226,11 @@ try:
     assert len(cash_entries) == 1 and cash_entries[0]['creatorName'] == 'Test Owner'
     _, report_after_cash = call('GET','/api/v1/reports/summary')
     assert report_after_cash['netRevenue'] == 100 and report_after_cash['otherIncome'] == 25 and report_after_cash['netCashFlow'] == 125
+    call('POST','/api/v1/cash-entries',{'idempotencyKey':str(__import__('uuid').uuid4()),'kind':'OperatingExpense','method':'Cash','amount':30,'description':'Chi vận hành kiểm thử'})
+    _, daily = call('GET','/api/v1/reports/daily')
+    assert len(daily) == 1 and daily[0]['date'] == report_after_cash['from'], daily
+    assert daily[0]['grossSales'] == 200 and daily[0]['returnedSales'] == 100 and daily[0]['netRevenue'] == 100
+    assert daily[0]['cashIn'] == 225 and daily[0]['cashOut'] == 130 and daily[0]['netCashFlow'] == 95, daily
     _, profile = call('PUT','/api/v1/me/profile',{'fullName':'Updated Owner'})
     assert profile['fullName'] == 'Updated Owner'
     _, current_user = call('GET','/api/v1/me')

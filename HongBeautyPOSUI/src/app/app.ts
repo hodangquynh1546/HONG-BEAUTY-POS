@@ -2,7 +2,7 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
+import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
 
 type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit' | 'account';
 
@@ -50,6 +50,10 @@ export class App implements OnInit {
   readonly report = signal<ReportSummary | null>(null);
   readonly paymentMethodReport = signal<PaymentMethodReport[]>([]);
   readonly topProductsReport = signal<TopProductReport[]>([]);
+  readonly dailyTrend = signal<DailyReportPoint[]>([]);
+  readonly chartPoints = computed(() => this.dailyTrend().slice(-31));
+  readonly revenueScale = computed(() => Math.max(1, ...this.chartPoints().map(point => Math.abs(point.netRevenue))));
+  readonly cashScale = computed(() => Math.max(1, ...this.chartPoints().flatMap(point => [point.cashIn, point.cashOut])));
   readonly returnLines = signal<OrderLine[]>([]);
   readonly cart = signal<Record<string, number>>(JSON.parse(sessionStorage.getItem('hbpos_cart') || '{}'));
   readonly cartItems = computed(() => this.products().filter(p => (this.cart()[p.id] || 0) > 0));
@@ -756,15 +760,21 @@ export class App implements OnInit {
     await this.loadReport();
   }
 
+  revenueBarWidth(value: number): number {
+    return value === 0 ? 0 : Math.max(2, Math.abs(value) / this.revenueScale() * 100);
+  }
+
   private async fetchReport(): Promise<void> {
     const range = `from=${encodeURIComponent(this.reportFrom)}&to=${encodeURIComponent(this.reportTo)}`;
-    const [summary, methods, topProducts] = await Promise.all([
+    const [summary, methods, topProducts, daily] = await Promise.all([
       this.api.get<ReportSummary>(`/reports/summary?${range}`),
       this.api.get<PaymentMethodReport[]>(`/reports/payment-methods?${range}`),
-      this.api.get<TopProductReport[]>(`/reports/top-products?${range}`)
+      this.api.get<TopProductReport[]>(`/reports/top-products?${range}`),
+      this.api.get<DailyReportPoint[]>(`/reports/daily?${range}`)
     ]);
     this.report.set(summary);
     this.paymentMethodReport.set(methods);
     this.topProductsReport.set(topProducts);
+    this.dailyTrend.set(daily);
   }
 }

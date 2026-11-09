@@ -17,6 +17,8 @@ export class App implements OnInit {
   readonly products = signal<Product[]>([]);
   readonly categories = signal<Category[]>([]);
   readonly customers = signal<Customer[]>([]);
+  readonly customerTotal = signal(0);
+  readonly posCustomers = signal<Customer[]>([]);
   readonly suppliers = signal<Supplier[]>([]);
   readonly employees = signal<Employee[]>([]);
   readonly auditEvents = signal<AuditEvent[]>([]);
@@ -45,6 +47,8 @@ export class App implements OnInit {
   editingCategoryId = '';
   newCustomer = { fullName: '', phone: '', email: '' };
   editingCustomerId = '';
+  customerSearch = '';
+  posCustomerSearch = '';
   newSupplier = { code: '', name: '', phone: '', email: '' };
   editingSupplierId = '';
   newEmployee = { email: '', fullName: '', password: '' };
@@ -83,6 +87,33 @@ export class App implements OnInit {
     if (!this.pendingOrderId) this.paymentAmount = this.cartTotal();
   }
 
+  private async loadCustomers(reset: boolean): Promise<void> {
+    const skip = reset ? 0 : this.customers().length;
+    const result = await this.api.get<{ items: Customer[]; total: number }>(`/customers/search?q=${encodeURIComponent(this.customerSearch.trim())}&skip=${skip}&take=50`);
+    this.customers.set(reset ? result.items : [...this.customers(), ...result.items]);
+    this.customerTotal.set(result.total);
+  }
+
+  async searchCustomers(reset = true): Promise<void> {
+    this.loading.set(true); this.error.set('');
+    try { await this.loadCustomers(reset); }
+    catch { this.error.set('Không tìm được khách hàng. Vui lòng thử lại.'); }
+    finally { this.loading.set(false); }
+  }
+
+  private async loadPosCustomers(): Promise<void> {
+    const result = await this.api.get<{ items: Customer[] }>(`/customers/search?q=${encodeURIComponent(this.posCustomerSearch.trim())}&skip=0&take=50&activeOnly=true`);
+    const selected = this.posCustomers().find(c => c.id === this.selectedCustomerId);
+    this.posCustomers.set(selected && !result.items.some(c => c.id === selected.id) ? [selected, ...result.items] : result.items);
+  }
+
+  async searchPosCustomers(): Promise<void> {
+    this.loading.set(true); this.error.set('');
+    try { await this.loadPosCustomers(); }
+    catch { this.error.set('Không tìm được khách hàng. Vui lòng thử lại.'); }
+    finally { this.loading.set(false); }
+  }
+
   async login(): Promise<void> {
     this.loading.set(true); this.error.set('');
     try {
@@ -100,7 +131,10 @@ export class App implements OnInit {
         this.products.set(await this.api.get<Product[]>('/products'));
         this.categories.set(await this.api.get<Category[]>('/categories'));
       }
-      if (this.api.can('customers.read')) this.customers.set(await this.api.get<Customer[]>('/customers'));
+      if (this.api.can('customers.read')) {
+        await this.loadCustomers(true);
+        await this.loadPosCustomers();
+      }
       if (this.api.can('suppliers.read')) this.suppliers.set(await this.api.get<Supplier[]>('/suppliers'));
       if (this.api.can('inventory.read')) {
         this.stock.set(await this.api.get<StockItem[]>('/stock'));

@@ -282,6 +282,29 @@ protectedApi.MapGet("/customers", async (ClaimsPrincipal principal, PosDbContext
     return Results.Ok(await db.Customers.AsNoTracking().OrderBy(c => c.FullName)
         .Select(c => new { c.Id, c.FullName, c.Phone, c.Email, c.Active }).Take(200).ToListAsync(ct));
 });
+protectedApi.MapGet("/customers/search", async (ClaimsPrincipal principal, PosDbContext db, string? q, int? skip, int? take, bool? activeOnly, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "customers.read", ct)) return Results.Forbid();
+    var offset = skip ?? 0;
+    var pageSize = take ?? 50;
+    var term = q?.Trim();
+    if (offset < 0 || pageSize is < 1 or > 100 || term?.Length > 100)
+        return Results.BadRequest(new { error = "Bộ lọc khách hàng không hợp lệ" });
+    var query = db.Customers.AsNoTracking().AsQueryable();
+    if (activeOnly == true) query = query.Where(c => c.Active);
+    if (!string.IsNullOrEmpty(term))
+    {
+        var pattern = "%" + term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+        query = query.Where(c => EF.Functions.ILike(c.FullName, pattern, "\\") ||
+            (c.Phone != null && EF.Functions.ILike(c.Phone, pattern, "\\")) ||
+            (c.Email != null && EF.Functions.ILike(c.Email, pattern, "\\")));
+    }
+    var total = await query.CountAsync(ct);
+    var items = await query.OrderBy(c => c.FullName).ThenBy(c => c.Id)
+        .Skip(offset).Take(pageSize)
+        .Select(c => new { c.Id, c.FullName, c.Phone, c.Email, c.Active }).ToListAsync(ct);
+    return Results.Ok(new { items, total });
+});
 protectedApi.MapPost("/customers", async (ClaimsPrincipal principal, PosDbContext db, CreateCustomerRequest request, CancellationToken ct) =>
 {
     if (!await HasPermission(principal, db, "customers.write", ct)) return Results.Forbid();

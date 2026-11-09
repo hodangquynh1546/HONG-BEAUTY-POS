@@ -1,0 +1,13 @@
+.search-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.search-row input {
+  min-width: 0;
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #e5d9d8;
+  border-radius: 8px;
+}

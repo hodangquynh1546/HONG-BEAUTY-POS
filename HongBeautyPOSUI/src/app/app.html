@@ -61,8 +61,10 @@
       }
       @if (page() === 'customers') {
         <div class="columns"><section class="panel grow"><h2>Danh sách khách hàng</h2>
+          <div class="search-row"><input name="customerSearch" [(ngModel)]="customerSearch" (keyup.enter)="searchCustomers()" placeholder="Tìm tên, điện thoại hoặc email"><button class="refresh" [disabled]="loading()" (click)="searchCustomers()">Tìm</button></div>
           @if (customers().length) { <div class="table-wrap"><table><thead><tr><th>Họ tên</th><th>Điện thoại</th><th>Email</th><th>Trạng thái</th><th></th></tr></thead><tbody>@for (customer of customers(); track customer.id) { <tr><td>{{ customer.fullName }}</td><td>{{ customer.phone || '—' }}</td><td>{{ customer.email || '—' }}</td><td>{{ customer.active ? 'Đang dùng' : 'Ngừng dùng' }}</td><td>@if (api.can('customers.write')) { <button class="refresh" [disabled]="loading()" (click)="editCustomer(customer)">Sửa</button> <button class="refresh" [disabled]="loading()" (click)="setCustomerActive(customer)">{{ customer.active ? 'Ngừng dùng' : 'Kích hoạt' }}</button> }</td></tr> }</tbody></table></div> }
-          @else { <div class="empty">Chưa có khách hàng. Bán lẻ vẫn có thể không cần hồ sơ.</div> }
+          @else { <div class="empty">Không tìm thấy khách hàng. Bán lẻ vẫn có thể không cần hồ sơ.</div> }
+          @if (customers().length < customerTotal()) { <button class="refresh" [disabled]="loading()" (click)="searchCustomers(false)">Xem thêm khách hàng</button> }
         </section>@if (api.can('customers.write')) { <section class="panel form-panel"><h2>{{ editingCustomerId ? 'Sửa khách hàng' : 'Thêm khách hàng' }}</h2><form (ngSubmit)="saveCustomer()"><label>Họ tên<input name="customerName" [(ngModel)]="newCustomer.fullName" required></label><label>Điện thoại<input name="customerPhone" [(ngModel)]="newCustomer.phone"></label><label>Email<input name="customerEmail" type="email" [(ngModel)]="newCustomer.email"></label><button class="primary" [disabled]="loading()">{{ editingCustomerId ? 'Lưu thay đổi' : 'Lưu khách hàng' }}</button>@if (editingCustomerId) { <button type="button" class="refresh" (click)="cancelCustomerEdit()">Hủy sửa</button> }</form></section> }</div>
       }
       @if (page() === 'suppliers') {
@@ -116,7 +118,8 @@
           @if (cartItems().length) { @for (item of cartItems(); track item.id) { <div class="cart-row"><div><b>{{ item.name }}</b><small>{{ item.salePrice | currency:'VND':'symbol':'1.0-0' }}</small></div><div class="cart-qty"><button (click)="changeCart(item.id, -1)">−</button><span>{{ cart()[item.id] }}</span><button (click)="changeCart(item.id, 1)">+</button></div></div> } }
           @else { <div class="empty">Giỏ hàng trống.</div> }
           <div class="cart-total"><span>Tổng tiền</span><strong>{{ cartTotal() | currency:'VND':'symbol':'1.0-0' }}</strong></div>
-          <label>Khách hàng<select name="customerId" [(ngModel)]="selectedCustomerId"><option value="">Khách lẻ</option>@for (customer of customers(); track customer.id) { @if (customer.active) { <option [value]="customer.id">{{ customer.fullName }}</option> } }</select></label>
+          <div class="search-row"><input name="posCustomerSearch" [(ngModel)]="posCustomerSearch" (keyup.enter)="searchPosCustomers()" placeholder="Tìm khách theo tên, điện thoại, email"><button class="refresh" [disabled]="loading()" (click)="searchPosCustomers()">Tìm khách</button></div>
+          <label>Khách hàng<select name="customerId" [(ngModel)]="selectedCustomerId"><option value="">Khách lẻ</option>@for (customer of posCustomers(); track customer.id) { <option [value]="customer.id">{{ customer.fullName }}</option> }</select></label>
           <label>Phương thức thanh toán<select name="paymentMethod" [(ngModel)]="paymentMethod"><option value="Cash">Tiền mặt</option><option value="BankTransfer">Chuyển khoản</option><option value="QrBanking">QR Banking</option></select></label>
           <label>Số tiền nhận<input name="paymentAmount" type="number" min="0" [(ngModel)]="paymentAmount"></label>
           <p class="hint">Có thể nhận một phần tiền; đơn sẽ còn công nợ. Mỗi lần thử lại giữ nguyên mã chống trùng.</p>

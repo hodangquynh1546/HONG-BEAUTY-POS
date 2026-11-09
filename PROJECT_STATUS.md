@@ -27,6 +27,7 @@
 - Báo cáo tách tiền đã thu, tiền đã hoàn và thực nhận theo tiền mặt, chuyển khoản, QR từ giao dịch thật; API giới hạn khoảng ngày và kiểm tra quyền xem báo cáo.
 - Báo cáo 10 sản phẩm bán chạy hiển thị tên, số đã bán, đã trả và bán ròng theo khoảng ngày từ đơn hàng và phiếu trả thật.
 - Sidebar có biểu tượng Material Symbols, giữ trạng thái thu gọn/mở rộng khi chuyển chức năng; trang tài khoản cho đổi tên và mật khẩu. Nhân viên quên mật khẩu được Chủ sở hữu đặt lại; Chủ sở hữu có lệnh khôi phục riêng trên máy chủ, không mở API đặt lại mật khẩu công khai.
+- Trang Tổng quan có bộ lọc Hôm nay, Hôm qua, 7 ngày, Tháng này, Tháng trước và ngày tùy chọn; hiển thị chỉ số, sản phẩm bán chạy, phương thức thanh toán và 5 đơn gần nhất từ API theo quyền người dùng.
 - Sửa khởi động Render khi chưa có biến `OWNER_*`: dịch vụ ghi cảnh báo và vẫn chạy; khi nhập đủ thông tin hợp lệ rồi triển khai lại thì tạo Chủ sở hữu. PostgreSQL smoke test trên database mới xác nhận `/health` trả 200 trước khi thiết lập, đăng nhập trả 401 trước và 200 sau khi nhập thông tin.
 
 ## Chưa xác minh

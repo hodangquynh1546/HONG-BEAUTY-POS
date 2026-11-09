@@ -44,6 +44,7 @@ export class App implements OnInit {
   readonly currentStocktake = signal<StocktakeSession | null>(null);
   readonly purchases = signal<PurchaseReceipt[]>([]);
   readonly orders = signal<SalesOrder[]>([]);
+  readonly recentOrders = signal<SalesOrder[]>([]);
   readonly receipt = signal<OrderReceipt | null>(null);
   readonly orderTotal = signal(0);
   readonly report = signal<ReportSummary | null>(null);
@@ -96,6 +97,7 @@ export class App implements OnInit {
   returnRestock: Record<string, boolean> = {};
   reportFrom = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
   reportTo = this.reportFrom;
+  reportPeriod: 'today' | 'yesterday' | 'last7' | 'thisMonth' | 'lastMonth' | 'custom' = 'today';
 
   constructor(readonly api: ApiService) {}
 
@@ -247,6 +249,8 @@ export class App implements OnInit {
       if (this.api.can('cash.read')) this.cashEntries.set(await this.api.get<CashEntry[]>('/cash-entries'));
       if (this.api.can('sales.read')) {
         await this.loadOrders(true);
+        const recent = await this.api.get<{ items: SalesOrder[] }>('/orders/search?skip=0&take=5');
+        this.recentOrders.set(recent.items);
         const pending = this.orders().find(o => o.id === this.pendingOrderId);
         if (pending) this.paymentAmount = Math.max(0, pending.total - pending.paidTotal);
       }
@@ -737,6 +741,19 @@ export class App implements OnInit {
     try { await this.fetchReport(); }
     catch { this.error.set('Không tải được báo cáo. Khoảng ngày tối đa 367 ngày.'); }
     finally { this.loading.set(false); }
+  }
+
+  async selectReportPeriod(period: 'today' | 'yesterday' | 'last7' | 'thisMonth' | 'lastMonth'): Promise<void> {
+    this.reportPeriod = period;
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+    const date = new Date(`${today}T00:00:00Z`);
+    const asDay = (value: Date) => value.toISOString().slice(0, 10);
+    if (period === 'today') { this.reportFrom = today; this.reportTo = today; }
+    if (period === 'yesterday') { date.setUTCDate(date.getUTCDate() - 1); this.reportFrom = asDay(date); this.reportTo = this.reportFrom; }
+    if (period === 'last7') { this.reportTo = today; date.setUTCDate(date.getUTCDate() - 6); this.reportFrom = asDay(date); }
+    if (period === 'thisMonth') { this.reportFrom = today.slice(0, 8) + '01'; this.reportTo = today; }
+    if (period === 'lastMonth') { date.setUTCDate(0); this.reportTo = asDay(date); date.setUTCDate(1); this.reportFrom = asDay(date); }
+    await this.loadReport();
   }
 
   private async fetchReport(): Promise<void> {

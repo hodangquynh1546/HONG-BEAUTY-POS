@@ -19,3 +19,6 @@
   align-items: end;
   margin: 14px 0;
 }
+.dashboard-filter{margin-top:20px}.dashboard-filter h2{margin-bottom:14px}.dashboard-section{margin-top:20px}
+.period-presets{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:15px}.period-presets .refresh.active{background:#62293e;color:#fff;border-color:#62293e}
+.dashboard-date-range{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.dashboard-date-range label{min-width:150px;margin:0}.dashboard-date-range .refresh{height:43px}

@@ -25,6 +25,17 @@ public sealed class StockRepository(PosDbContext db) : IStockRepository
 		StockAdjustmentResult result;
 		await using (IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(cancellationToken))
 		{
+			if (delta > 0m)
+			{
+				await using DbCommand createBalance = db.Database.GetDbConnection().CreateCommand();
+				createBalance.Transaction = transaction.GetDbTransaction();
+				createBalance.CommandText = "INSERT INTO stock_balances (\"ProductId\", \"Quantity\") SELECT @productId, 0 FROM products WHERE \"Id\" = @productId ON CONFLICT (\"ProductId\") DO NOTHING";
+				DbParameter createProductParameter = createBalance.CreateParameter();
+				createProductParameter.ParameterName = "productId";
+				createProductParameter.Value = productId;
+				createBalance.Parameters.Add(createProductParameter);
+				await createBalance.ExecuteNonQueryAsync(cancellationToken);
+			}
 			StockAdjustmentResult stockAdjustmentResult2;
 			await using (DbCommand command = db.Database.GetDbConnection().CreateCommand())
 			{

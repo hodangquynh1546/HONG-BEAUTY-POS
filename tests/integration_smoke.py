@@ -295,6 +295,18 @@ try:
     assert movement_after_adjustment['items'][0]['type'] == 'ADJUSTMENT'
     _, audit = call('GET','/api/v1/audit-events')
     assert any(event['action']=='OWNER_PASSWORD_RECOVERED' for event in audit)
+    _, zero_stock_product = call('POST','/api/v1/products',{'sku':'ZERO-' + secrets.token_hex(4),'name':'Sản phẩm chưa nhập','unit':'cái','salePrice':100,'costPrice':50,'reorderLevel':1})
+    zero_id = zero_stock_product['id']
+    _, added_to_zero = call('POST','/api/v1/stock/adjustments',{'productId':zero_id,'delta':3,'reason':'Điều chỉnh tồn ban đầu'})
+    assert added_to_zero['before'] == 0 and added_to_zero['after'] == 3
+    _, reduced_zero = call('POST','/api/v1/stock/adjustments',{'productId':zero_id,'delta':-1,'reason':'Hàng hư hỏng'})
+    assert reduced_zero['before'] == 3 and reduced_zero['after'] == 2
+    try:
+        call('POST','/api/v1/stock/adjustments',{'productId':zero_id,'delta':-3,'reason':'Không đủ tồn'})
+        raise AssertionError('Adjustment allowed negative stock on newly created product')
+    except RuntimeError as error:
+        assert 'HTTP 409' in str(error), error
+    print('PASS: stock adjustment from zero and negative-stock guard')
     discounted_key = str(__import__('uuid').uuid4())
     _, discounted_order = call('POST','/api/v1/orders',{'idempotencyKey':discounted_key,'customerId':customer['id'],'discount':10,'items':[{'productId':pid,'quantity':1}]})
     assert discounted_order['total'] == 90, discounted_order

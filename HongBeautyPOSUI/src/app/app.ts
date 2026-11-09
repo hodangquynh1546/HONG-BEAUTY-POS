@@ -157,6 +157,16 @@ export class App implements OnInit {
     await this.api.restore();
     this.profileName = this.api.user()?.fullName ?? '';
     this.profileAvatarData = this.api.user()?.avatarData ?? '';
+    const pendingCash = sessionStorage.getItem('hbpos_cash_pending');
+    if (pendingCash) {
+      try {
+        const saved = JSON.parse(pendingCash);
+        if (saved && typeof saved.idempotencyKey === 'string' && typeof saved.amount === 'number' &&
+            typeof saved.description === 'string' && typeof saved.kind === 'string' && typeof saved.method === 'string')
+          this.newCashEntry = { kind: saved.kind, method: saved.method, amount: saved.amount, description: saved.description };
+        else { sessionStorage.removeItem('hbpos_cash_pending'); this.cashPending.set(false); }
+      } catch { sessionStorage.removeItem('hbpos_cash_pending'); this.cashPending.set(false); }
+    }
     if (this.api.user()) await this.refresh();
     if (!this.pendingOrderId) this.paymentAmount = this.payableTotal();
   }
@@ -672,7 +682,13 @@ export class App implements OnInit {
   }
 
   async adjustStock(): Promise<void> {
-    if (!await this.askConfirmation(`Điều chỉnh tồn kho ${this.adjustment.delta > 0 ? '+' : ''}${this.adjustment.delta} sản phẩm?`)) return;
+    const item = this.stock().find(x => x.productId === this.adjustment.productId);
+    const delta = Number(this.adjustment.delta);
+    if (!item) { this.error.set('Hãy chọn sản phẩm cần điều chỉnh.'); return; }
+    if (!Number.isFinite(delta) || delta === 0 || Math.abs(delta * 1000 - Math.round(delta * 1000)) > 1e-7) { this.error.set('Số lượng thay đổi phải khác 0 và có tối đa 3 chữ số thập phân.'); return; }
+    if (item.quantity + delta < 0) { this.error.set(`Sản phẩm chỉ còn ${item.quantity}; không thể giảm ${Math.abs(delta)}.`); return; }
+    if (this.adjustment.reason.trim().length < 5) { this.error.set('Lý do phải có ít nhất 5 ký tự.'); return; }
+    if (!await this.askConfirmation(`Điều chỉnh ${item.name}: ${item.quantity} → ${item.quantity + delta}. Lý do: ${this.adjustment.reason.trim()}?`)) return;
     this.loading.set(true); this.error.set('');
     try {
       await this.api.post('/stock/adjustments', this.adjustment);
@@ -680,7 +696,7 @@ export class App implements OnInit {
       this.overlay.set(null);
       this.notice.set('Đã ghi nhận thay đổi kho và lịch sử');
       await this.refresh();
-    } catch { this.error.set('Không điều chỉnh được kho. Kiểm tra tồn và lý do.'); }
+    } catch (error) { this.error.set(this.apiErrorMessage(error, 'Không điều chỉnh được kho. Vui lòng tải lại tồn kho rồi thử lại.')); }
     finally { this.loading.set(false); }
   }
 
@@ -873,6 +889,9 @@ export class App implements OnInit {
   }
 
   async saveCashEntry(): Promise<void> {
+    if (!this.cashPending() && (!Number.isFinite(Number(this.newCashEntry.amount)) || Number(this.newCashEntry.amount) <= 0 || !this.newCashEntry.description.trim())) {
+      this.error.set('Nhập số tiền lớn hơn 0 và nội dung thu chi.'); return;
+    }
     if (!this.cashPending() && !await this.askConfirmation(`Ghi ${this.newCashEntry.amount.toLocaleString('vi-VN')} đ vào sổ thu chi?`, 'Ghi phiếu')) return;
     this.loading.set(true); this.error.set('');
     let savedSuccessfully = false;
@@ -893,7 +912,7 @@ export class App implements OnInit {
         sessionStorage.removeItem('hbpos_cash_pending');
         this.cashPending.set(false);
       }
-      this.error.set('Chưa xác nhận được phiếu. Nếu mất mạng, bấm thử lại để dùng đúng mã giao dịch cũ, tránh ghi trùng.');
+      this.error.set(this.apiErrorMessage(error, 'Chưa xác nhận được phiếu. Nếu mất mạng, bấm thử lại để dùng đúng mã giao dịch cũ, tránh ghi trùng.'));
     } finally { this.loading.set(false); }
     if (savedSuccessfully) {
       try {
@@ -901,6 +920,28 @@ export class App implements OnInit {
         if (this.api.can('reports.read')) this.report.set(await this.api.get<ReportSummary>(`/reports/summary?from=${this.reportFrom}&to=${this.reportTo}`));
       } catch { this.notice.set('Phiếu đã lưu; chưa tải lại được danh sách hoặc báo cáo. Bấm Làm mới để xem.'); }
     }
+  }
+
+  async cancelPendingCash(): Promise<void> {
+    if (!await this.askConfirmation('Chỉ bỏ phiếu chờ sau khi đã kiểm tra lịch sử thu chi. Nếu giao dịch đã được lưu, ghi phiếu mới có thể tạo trùng. Bạn muốn bỏ phiếu chờ?', 'Bỏ phiếu chờ')) return;
+    sessionStorage.removeItem('hbpos_cash_pending');
+    this.cashPending.set(false);
+    this.newCashEntry = { kind: 'OperatingExpense', method: 'Cash', amount: 0, description: '' };
+    this.error.set('');
+  }
+
+  private apiErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof HttpErrorResponse) {
+      if (error.status === 403) return 'Tài khoản chưa được cấp quyền thực hiện thao tác này.';
+      if (error.status === 401) return 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.';
+      if (typeof error.error?.error === 'string') return error.error.error;
+    }
+    return fallback;
+  }
+
+  openAuditDetail(event: AuditEvent): void {
+    this.selectedAuditEvent.set(event);
+    this.openOverlay('auditDetail');
   }
 
   auditActionLabel(action: string): string {

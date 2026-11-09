@@ -227,43 +227,57 @@ export class App implements OnInit {
       if (this.api.isNative) this.api.setServerUrl(this.serverUrlInput);
       await this.api.login(this.email, this.password); this.password = ''; this.notice.set(''); this.profileName = this.api.user()?.fullName ?? ''; await this.refresh();
     }
-    catch (error) { this.error.set(error instanceof Error && (error.message.includes('máy chủ') || error.message.includes('HTTPS')) ? error.message : 'Không đăng nhập được. Kiểm tra máy chủ, kết nối và tài khoản.'); }
+    catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 429) this.error.set('Bạn đã thử đăng nhập nhiều lần. Vui lòng chờ khoảng 1 phút rồi thử lại.');
+      else if (error instanceof HttpErrorResponse && error.status === 401) this.error.set('Email hoặc mật khẩu không đúng.');
+      else this.error.set(error instanceof Error && (error.message.includes('máy chủ') || error.message.includes('HTTPS')) ? error.message : 'Không đăng nhập được. Kiểm tra máy chủ và kết nối.');
+    }
     finally { this.loading.set(false); }
   }
 
   async refresh(): Promise<void> {
     this.loading.set(true); this.error.set('');
+    const failed: string[] = [];
+    const attempt = async (label: string, load: () => Promise<void>): Promise<void> => {
+      try { await load(); }
+      catch { failed.push(label); }
+    };
     try {
       if (this.api.can('products.read')) {
-        this.products.set(await this.api.get<Product[]>('/products'));
-        this.posProducts.set(this.products());
-        this.categories.set(await this.api.get<Category[]>('/categories'));
+        await attempt('sản phẩm', async () => {
+          this.products.set(await this.api.get<Product[]>('/products'));
+          this.posProducts.set(this.products());
+        });
+        await attempt('danh mục', async () => this.categories.set(await this.api.get<Category[]>('/categories')));
       }
       if (this.api.can('customers.read')) {
-        await this.loadCustomers(true);
-        await this.loadPosCustomers();
+        await attempt('khách hàng', async () => this.loadCustomers(true));
+        await attempt('khách tại quầy', async () => this.loadPosCustomers());
       }
-      if (this.api.can('suppliers.read')) this.suppliers.set(await this.api.get<Supplier[]>('/suppliers'));
+      if (this.api.can('suppliers.read')) await attempt('nhà cung cấp', async () => this.suppliers.set(await this.api.get<Supplier[]>('/suppliers')));
       if (this.api.can('inventory.read')) {
-        this.stock.set(await this.api.get<StockItem[]>('/stock'));
-        await this.loadStockMovements(true);
-        this.stocktakes.set(await this.api.get<StocktakeSession[]>('/stocktakes'));
+        await attempt('tồn kho', async () => this.stock.set(await this.api.get<StockItem[]>('/stock')));
+        await attempt('lịch sử kho', async () => this.loadStockMovements(true));
+        await attempt('kiểm kho', async () => this.stocktakes.set(await this.api.get<StocktakeSession[]>('/stocktakes')));
       }
-      if (this.api.can('purchases.read')) this.purchases.set(await this.api.get<PurchaseReceipt[]>('/purchases'));
-      if (this.api.can('cash.read')) this.cashEntries.set(await this.api.get<CashEntry[]>('/cash-entries'));
+      if (this.api.can('purchases.read')) await attempt('phiếu nhập', async () => this.purchases.set(await this.api.get<PurchaseReceipt[]>('/purchases')));
+      if (this.api.can('cash.read')) await attempt('thu chi', async () => this.cashEntries.set(await this.api.get<CashEntry[]>('/cash-entries')));
       if (this.api.can('sales.read')) {
-        await this.loadOrders(true);
-        const recent = await this.api.get<{ items: SalesOrder[] }>('/orders/search?skip=0&take=5');
-        this.recentOrders.set(recent.items);
+        await attempt('đơn hàng', async () => this.loadOrders(true));
+        await attempt('đơn mới', async () => {
+          const recent = await this.api.get<{ items: SalesOrder[] }>('/orders/search?skip=0&take=5');
+          this.recentOrders.set(recent.items);
+        });
         const pending = this.orders().find(o => o.id === this.pendingOrderId);
         if (pending) this.paymentAmount = Math.max(0, pending.total - pending.paidTotal);
       }
-      if (this.api.can('reports.read')) await this.fetchReport();
+      if (this.api.can('reports.read')) await attempt('báo cáo', async () => this.fetchReport());
       if (this.api.user()?.role === 'Owner') {
-        this.employees.set(await this.api.get<Employee[]>('/employees'));
-        this.availablePermissions.set(await this.api.get<string[]>('/permissions'));
-        this.auditEvents.set(await this.api.get<AuditEvent[]>('/audit-events'));
+        await attempt('nhân viên', async () => this.employees.set(await this.api.get<Employee[]>('/employees')));
+        await attempt('danh sách quyền', async () => this.availablePermissions.set(await this.api.get<string[]>('/permissions')));
+        await attempt('nhật ký', async () => this.auditEvents.set(await this.api.get<AuditEvent[]>('/audit-events')));
       }
+      if (failed.length) this.error.set(`Không tải được: ${failed.join(', ')}. Các phần khác vẫn sử dụng được; bấm Làm mới để thử lại.`);
     } catch { this.error.set('Không tải được dữ liệu. Vui lòng thử lại.'); }
     finally { this.loading.set(false); }
   }
@@ -743,7 +757,7 @@ export class App implements OnInit {
   async loadReport(): Promise<void> {
     this.loading.set(true); this.error.set('');
     try { await this.fetchReport(); }
-    catch { this.error.set('Không tải được báo cáo. Khoảng ngày tối đa 367 ngày.'); }
+    catch (error) { this.error.set(error instanceof Error ? error.message : 'Không tải được báo cáo. Khoảng ngày tối đa 367 ngày.'); }
     finally { this.loading.set(false); }
   }
 
@@ -766,15 +780,19 @@ export class App implements OnInit {
 
   private async fetchReport(): Promise<void> {
     const range = `from=${encodeURIComponent(this.reportFrom)}&to=${encodeURIComponent(this.reportTo)}`;
-    const [summary, methods, topProducts, daily] = await Promise.all([
+    const [summary, methods, topProducts, daily] = await Promise.allSettled([
       this.api.get<ReportSummary>(`/reports/summary?${range}`),
       this.api.get<PaymentMethodReport[]>(`/reports/payment-methods?${range}`),
       this.api.get<TopProductReport[]>(`/reports/top-products?${range}`),
       this.api.get<DailyReportPoint[]>(`/reports/daily?${range}`)
     ]);
-    this.report.set(summary);
-    this.paymentMethodReport.set(methods);
-    this.topProductsReport.set(topProducts);
-    this.dailyTrend.set(daily);
+    this.report.set(summary.status === 'fulfilled' ? summary.value : null);
+    this.paymentMethodReport.set(methods.status === 'fulfilled' ? methods.value : []);
+    this.topProductsReport.set(topProducts.status === 'fulfilled' ? topProducts.value : []);
+    this.dailyTrend.set(daily.status === 'fulfilled' ? daily.value : []);
+    const failed = [summary, methods, topProducts, daily]
+      .map((result, index) => result.status === 'rejected' ? ['tổng hợp', 'thanh toán', 'sản phẩm bán chạy', 'biểu đồ'][index] : '')
+      .filter(Boolean);
+    if (failed.length) throw new Error(`Không tải được báo cáo ${failed.join(', ')}. Kiểm tra khoảng ngày rồi thử lại.`);
   }
 }

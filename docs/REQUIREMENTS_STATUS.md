@@ -16,6 +16,6 @@ Kiểm tra trên source ở nhánh `main` ngày 2026-11-09. `training-doc.md` kh
 | Cài đặt, audit, backup | Có audit events và biến môi trường thiết yếu | Thiếu giao diện cấu hình cửa hàng, backup/restore và chính sách lưu dữ liệu lâu dài |
 | Mobile | Có source Android/iOS Capacitor, dùng cùng Angular/API; POS có nút quét camera bằng plugin native | Chưa build APK/IPA hoặc thử quét trên thiết bị; thiếu thông báo và tối ưu một số luồng một tay |
 | Docker, Render, Neon | Có Dockerfile, `docker-compose.yml`, `render.yaml` và hướng dẫn | Docker engine vắng trong môi trường này nên chưa chạy thử Compose; chưa xác minh Render/Neon thật |
-| Kiểm thử | Có integration smoke trên PostgreSQL cục bộ và build .NET/Angular | Thiếu unit suite, API integration suite đầy đủ và E2E 19 bước; chưa đạt điều kiện nghiệm thu cuối |
+| Kiểm thử | Integration smoke trên PostgreSQL cục bộ đã qua các luồng xác thực, quyền, sản phẩm, nhập/bán/trả hàng, thanh toán, kiểm kho, điều chỉnh tồn, báo cáo và thu chi; build .NET/Angular và kiểm thử tải giao diện khi một API lỗi đều đạt ngày 2026-11-09 | Thiếu unit suite, API integration suite đầy đủ, kiểm thử trình duyệt/thiết bị và E2E 19 bước; chưa đạt điều kiện nghiệm thu cuối |
 
 Chưa thể đánh dấu dự án hoàn thành theo Master Implementation Prompt. Mọi tính năng thiếu phải được triển khai và kiểm chứng trước khi dùng với dữ liệu kinh doanh thật.

@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { Capacitor } from '@capacitor/core';
 
@@ -63,9 +63,16 @@ export class ApiService {
     const user = this.user();
     return user?.role === 'Owner' || !!user?.permissions.includes(permission);
   }
-  get<T>(path: string): Promise<T> { return firstValueFrom(this.http.get<T>(this.base + path, { headers: this.headers() })); }
-  post<T>(path: string, body: unknown): Promise<T> { return firstValueFrom(this.http.post<T>(this.base + path, body, { headers: this.headers() })); }
-  put<T>(path: string, body: unknown): Promise<T> { return firstValueFrom(this.http.put<T>(this.base + path, body, { headers: this.headers() })); }
-  patch<T>(path: string, body: unknown): Promise<T> { return firstValueFrom(this.http.patch<T>(this.base + path, body, { headers: this.headers() })); }
+  private async request<T>(call: Promise<T>): Promise<T> {
+    try { return await call; }
+    catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 401 && this.token) this.logout();
+      throw error;
+    }
+  }
+  get<T>(path: string): Promise<T> { return this.request(firstValueFrom(this.http.get<T>(this.base + path, { headers: this.headers() }))); }
+  post<T>(path: string, body: unknown): Promise<T> { return this.request(firstValueFrom(this.http.post<T>(this.base + path, body, { headers: this.headers() }))); }
+  put<T>(path: string, body: unknown): Promise<T> { return this.request(firstValueFrom(this.http.put<T>(this.base + path, body, { headers: this.headers() }))); }
+  patch<T>(path: string, body: unknown): Promise<T> { return this.request(firstValueFrom(this.http.patch<T>(this.base + path, body, { headers: this.headers() }))); }
   private headers(): HttpHeaders { return this.token ? new HttpHeaders({ Authorization: `Bearer ${this.token}` }) : new HttpHeaders(); }
 }

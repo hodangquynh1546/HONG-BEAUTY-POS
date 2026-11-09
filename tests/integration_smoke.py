@@ -254,10 +254,24 @@ try:
     token = None
     _, recovered_auth = call('POST','/api/v1/auth/login',{'email':env['OWNER_EMAIL'],'password':recovered_password})
     token = recovered_auth['accessToken']
+    _, repeated_login = call('POST','/api/v1/auth/login',{'email':env['OWNER_EMAIL'],'password':recovered_password})
+    assert repeated_login['accessToken']
+    try:
+        call('POST','/api/v1/stock/adjustments',{'productId':pid,'delta':-9,'reason':'Kiểm thử thiếu tồn'})
+        raise AssertionError('Stock adjustment allowed negative quantity')
+    except RuntimeError as error:
+        assert 'HTTP 409' in str(error), error
+    _, adjusted = call('POST','/api/v1/stock/adjustments',{'productId':pid,'delta':-1,'reason':'Kiểm thử điều chỉnh'})
+    assert adjusted['after'] == 7, adjusted
+    _, stock_after_adjustment = call('GET','/api/v1/stock')
+    assert next(x for x in stock_after_adjustment if x['productId']==pid)['quantity'] == 7
+    _, movement_after_adjustment = call('GET',f'/api/v1/stock/movements?productId={pid}&skip=0&take=1')
+    assert movement_after_adjustment['items'][0]['type'] == 'ADJUSTMENT'
     _, audit = call('GET','/api/v1/audit-events')
     assert any(event['action']=='OWNER_PASSWORD_RECOVERED' for event in audit)
     print('PASS: report balances')
     print('PASS: self profile, password change, and owner recovery')
+    print('PASS: shared-IP login allowance and guarded stock adjustment')
     print('PASS: employee permission and deactivation checks')
     print('PASS: migrate, bootstrap, login, product, supplier, purchase, sale, payment, return, stocktake')
 finally:

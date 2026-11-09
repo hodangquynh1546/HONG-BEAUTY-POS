@@ -97,6 +97,7 @@ export class App implements OnInit {
   readonly notice = signal('');
   email = '';
   password = '';
+  showLoginPassword = false;
   serverUrlInput = '';
   newProduct = { sku: '', barcode: '', name: '', unit: 'cái', reorderLevel: 0, salePrice: 0, costPrice: 0, categoryId: '', imageData: '' };
   editingProductId = '';

@@ -14,6 +14,11 @@ const api = {
   user: () => ({ role: 'Owner', fullName: 'Chủ cửa hàng' }),
   can: () => true,
   patch: async () => { statusChanges++; },
+  post: async (path, body) => {
+    if (path === '/categories') return { id: 'new-category', name: body.name, parentId: null, active: true };
+    if (path === '/attributes') return body.values.map((value, index) => ({ id: `new-option-${index}`, name: body.name, value }));
+    throw new Error(`Unexpected POST ${path}`);
+  },
   get: async path => {
     if (path.startsWith('/stock/movements')) {
       if (failMovement) throw new Error('stock movement unavailable');
@@ -71,3 +76,15 @@ app.answerConfirmation(true);
 await accepted;
 assert.equal(statusChanges, 1);
 console.log('PASS: form lớp phủ giữ trang hiện tại và xác nhận chặn thao tác khi hủy');
+
+app.createProduct();
+app.quickCategoryName = 'Son môi';
+await app.addQuickCategory();
+assert.equal(app.newProduct.categoryId, 'new-category');
+app.quickAttributeName = 'Màu';
+app.quickAttributeValues = 'Xanh, Đỏ';
+await app.addQuickAttribute();
+assert.equal(app.attributeOptions().length, 2);
+assert.deepEqual(Object.values(app.selectedAttributeOptions), [true, true]);
+assert.equal(app.overlay(), 'product');
+console.log('PASS: thêm nhanh danh mục và giá trị thuộc tính tự chọn vào sản phẩm');

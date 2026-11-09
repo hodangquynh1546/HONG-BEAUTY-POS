@@ -36,7 +36,8 @@ public sealed class ProductCatalog(IProductRepository repository)
 			Balance = new StockBalance
 			{
 				Quantity = 0m
-			}
+			},
+			AttributeSelections = (request.AttributeOptionIds ?? []).Distinct().Select(id => new ProductAttributeSelection { OptionId = id }).ToList()
 		}, cancellationToken);
 	}
 }

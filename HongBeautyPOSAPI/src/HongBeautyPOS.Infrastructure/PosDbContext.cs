@@ -14,6 +14,10 @@ public sealed class PosDbContext : DbContext
 
 	public DbSet<Product> Products => Set<Product>();
 
+	public DbSet<AttributeOption> AttributeOptions => Set<AttributeOption>();
+
+	public DbSet<ProductAttributeSelection> ProductAttributeSelections => Set<ProductAttributeSelection>();
+
 	public DbSet<StockBalance> StockBalances => Set<StockBalance>();
 
 	public DbSet<StockMovement> StockMovements => Set<StockMovement>();
@@ -92,6 +96,24 @@ public sealed class PosDbContext : DbContext
 			e.Property((Product x) => x.ReorderLevel).HasPrecision(18, 3);
 			e.HasOne<Category>().WithMany().HasForeignKey((Product x) => x.CategoryId);
 			e.HasOne((Product x) => x.Balance).WithOne().HasForeignKey((StockBalance x) => x.ProductId);
+			e.HasMany((Product x) => x.AttributeSelections).WithOne().HasForeignKey((ProductAttributeSelection x) => x.ProductId);
+		});
+		model.Entity((EntityTypeBuilder<AttributeOption> e) =>
+		{
+			e.ToTable("attribute_options");
+			e.HasKey(x => x.Id);
+			e.Property(x => x.Name).HasMaxLength(80);
+			e.Property(x => x.Value).HasMaxLength(100);
+			e.Property(x => x.NameKey).HasMaxLength(80);
+			e.Property(x => x.ValueKey).HasMaxLength(100);
+			e.HasIndex(x => new { x.NameKey, x.ValueKey }).IsUnique();
+		});
+		model.Entity((EntityTypeBuilder<ProductAttributeSelection> e) =>
+		{
+			e.ToTable("product_attribute_selections");
+			e.HasKey(x => new { x.ProductId, x.OptionId });
+			e.HasOne<AttributeOption>().WithMany().HasForeignKey(x => x.OptionId).OnDelete(DeleteBehavior.Restrict);
+			e.HasOne<Product>().WithMany(x => x.AttributeSelections).HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
 		});
 		model.Entity((EntityTypeBuilder<CashEntry> e) =>
 		{

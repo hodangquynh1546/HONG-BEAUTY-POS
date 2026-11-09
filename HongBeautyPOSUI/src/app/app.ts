@@ -2,7 +2,7 @@ import { Component, HostListener, OnInit, computed, signal } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
+import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type AttributeOption, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
 
 type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit' | 'account';
 type Overlay = 'account' | 'product' | 'category' | 'customer' | 'supplier' | 'employee' | 'permissions' | 'stock' | 'purchase' | 'cash' | 'return' | null;
@@ -27,6 +27,14 @@ export class App implements OnInit {
   readonly products = signal<Product[]>([]);
   readonly posProducts = signal<Product[]>([]);
   readonly categories = signal<Category[]>([]);
+  readonly attributeOptions = signal<AttributeOption[]>([]);
+  readonly attributeNames = computed(() => [...new Set(this.attributeOptions().map(x => x.name))]);
+  selectedAttributeOptions: Record<string, boolean> = {};
+  quickCategoryOpen = false;
+  quickCategoryName = '';
+  quickAttributeOpen = false;
+  quickAttributeName = '';
+  quickAttributeValues = '';
   readonly customers = signal<Customer[]>([]);
   readonly customerTotal = signal(0);
   readonly posCustomers = signal<Customer[]>([]);
@@ -113,6 +121,12 @@ export class App implements OnInit {
     return id ? this.categories().find(category => category.id === id)?.name || '—' : '—';
   }
 
+  productAttributeLabel(product: Product): string {
+    const grouped = new Map<string, string[]>();
+    for (const option of product.attributes ?? []) grouped.set(option.name, [...(grouped.get(option.name) ?? []), option.value]);
+    return [...grouped].map(([name, values]) => `${name}: ${values.join(', ')}`).join(' · ');
+  }
+
   canCompleteStocktake(session: StocktakeSession): boolean {
     return session.items.length > 0 && session.items.every(item => item.actualQuantity !== null);
   }
@@ -170,6 +184,34 @@ export class App implements OnInit {
   createCategory(): void { this.cancelCategoryEdit(); this.openOverlay('category'); }
   createCustomer(): void { this.cancelCustomerEdit(); this.openOverlay('customer'); }
   createSupplier(): void { this.cancelSupplierEdit(); this.openOverlay('supplier'); }
+
+  async addQuickCategory(): Promise<void> {
+    if (!this.quickCategoryName.trim()) return;
+    this.loading.set(true); this.error.set('');
+    try {
+      const created = await this.api.post<Category>('/categories', { name: this.quickCategoryName.trim(), parentId: null });
+      this.categories.set([...this.categories(), created].sort((a, b) => a.name.localeCompare(b.name, 'vi')));
+      this.newProduct.categoryId = created.id;
+      this.quickCategoryName = '';
+      this.quickCategoryOpen = false;
+    } catch { this.error.set('Không thêm được danh mục. Vui lòng kiểm tra tên.'); }
+    finally { this.loading.set(false); }
+  }
+
+  async addQuickAttribute(): Promise<void> {
+    const values = this.quickAttributeValues.split(',').map(x => x.trim()).filter(Boolean);
+    if (!this.quickAttributeName.trim() || !values.length) { this.error.set('Nhập tên thuộc tính và ít nhất một giá trị.'); return; }
+    this.loading.set(true); this.error.set('');
+    try {
+      const options = await this.api.post<AttributeOption[]>('/attributes', { name: this.quickAttributeName.trim(), values });
+      const byId = new Map([...this.attributeOptions(), ...options].map(x => [x.id, x]));
+      this.attributeOptions.set([...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'vi') || a.value.localeCompare(b.value, 'vi')));
+      for (const option of options) this.selectedAttributeOptions[option.id] = true;
+      this.quickAttributeOpen = false;
+      this.quickAttributeName = this.quickAttributeValues = '';
+    } catch { this.error.set('Không thêm được thuộc tính. Tên tối đa 80 ký tự, mỗi giá trị tối đa 100 ký tự.'); }
+    finally { this.loading.set(false); }
+  }
 
   async saveProfile(): Promise<void> {
     this.loading.set(true); this.error.set(''); this.notice.set('');
@@ -294,6 +336,7 @@ export class App implements OnInit {
           this.posProducts.set(this.products());
         });
         await attempt('danh mục', async () => this.categories.set(await this.api.get<Category[]>('/categories')));
+        await attempt('thuộc tính', async () => this.attributeOptions.set(await this.api.get<AttributeOption[]>('/attributes')));
       }
       if (this.api.can('customers.read')) {
         await attempt('khách hàng', async () => this.loadCustomers(true));
@@ -330,18 +373,23 @@ export class App implements OnInit {
   editProduct(product: Product): void {
     this.editingProductId = product.id;
     this.newProduct = { sku: product.sku, barcode: product.barcode ?? '', name: product.name, unit: product.unit, reorderLevel: product.reorderLevel, salePrice: product.salePrice, costPrice: product.costPrice, categoryId: product.categoryId ?? '' };
+    this.selectedAttributeOptions = Object.fromEntries((product.attributes ?? []).map(x => [x.id, true]));
     this.openOverlay('product');
   }
 
   cancelProductEdit(): void {
     this.editingProductId = '';
     this.newProduct = { sku: '', barcode: '', name: '', unit: 'cái', reorderLevel: 0, salePrice: 0, costPrice: 0, categoryId: '' };
+    this.selectedAttributeOptions = {};
+    this.quickCategoryOpen = this.quickAttributeOpen = false;
+    this.quickCategoryName = this.quickAttributeName = this.quickAttributeValues = '';
   }
 
   async saveProduct(): Promise<void> {
     this.loading.set(true); this.error.set('');
     try {
-      const payload = { ...this.newProduct, categoryId: this.newProduct.categoryId || null };
+      const payload = { ...this.newProduct, categoryId: this.newProduct.categoryId || null,
+        attributeOptionIds: Object.entries(this.selectedAttributeOptions).filter(([, selected]) => selected).map(([id]) => id) };
       if (this.editingProductId) await this.api.put(`/products/${this.editingProductId}`, payload);
       else await this.api.post('/products', payload);
       this.notice.set(this.editingProductId ? 'Đã cập nhật sản phẩm' : 'Đã tạo sản phẩm');

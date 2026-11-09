@@ -129,11 +129,19 @@ try:
     assert off['active'] is False
     _, on = call('PATCH',f"/api/v1/categories/{child['id']}/status",{'active':True})
     assert on['active'] is True
+    _, colors = call('POST','/api/v1/attributes',{'name':'Màu','values':['Xanh','Đỏ']})
+    _, sizes = call('POST','/api/v1/attributes',{'name':'Kích cỡ','values':['3']})
+    _, repeated_color = call('POST','/api/v1/attributes',{'name':'màu','values':['xanh']})
+    assert repeated_color[0]['id'] == colors[0]['id']
+    option_ids = [colors[0]['id'],colors[1]['id'],sizes[0]['id']]
+    _, catalog_options = call('GET','/api/v1/attributes')
+    assert len(catalog_options) == 3
     barcode = '893' + str(secrets.randbelow(10**10)).zfill(10)
-    _, product = call('POST','/api/v1/products',{'sku':'TEST-' + secrets.token_hex(4),'barcode':barcode,'name':'Test lipstick','unit':'thỏi','reorderLevel':3,'salePrice':100,'costPrice':50})
+    _, product = call('POST','/api/v1/products',{'sku':'TEST-' + secrets.token_hex(4),'barcode':barcode,'name':'Test lipstick','unit':'thỏi','reorderLevel':3,'salePrice':100,'costPrice':50,'attributeOptionIds':option_ids})
     assert product['barcode'] == barcode and product['unit'] == 'thỏi' and product['reorderLevel'] == 3
     _, barcode_results = call('GET',f'/api/v1/products?q={barcode}')
     assert len(barcode_results) == 1 and barcode_results[0]['id'] == product['id']
+    assert {x['id'] for x in barcode_results[0]['attributes']} == set(option_ids)
     pid = product['id']
     token = employee_auth['accessToken']
     try:
@@ -142,9 +150,12 @@ try:
     except RuntimeError as error:
         assert 'HTTP 401' in str(error), error
     token = owner_token
-    _, updated = call('PUT',f'/api/v1/products/{pid}',{'sku':product['sku'],'barcode':barcode,'name':'Updated lipstick','unit':'hộp','reorderLevel':5,'salePrice':100,'costPrice':50})
+    _, updated = call('PUT',f'/api/v1/products/{pid}',{'sku':product['sku'],'barcode':barcode,'name':'Updated lipstick','unit':'hộp','reorderLevel':5,'salePrice':100,'costPrice':50,'attributeOptionIds':[colors[1]['id'],sizes[0]['id']]})
     assert updated['barcode'] == barcode and updated['unit'] == 'hộp' and updated['reorderLevel'] == 5
     assert updated['name'] == 'Updated lipstick'
+    _, after_attribute_update = call('GET',f'/api/v1/products?q={barcode}')
+    assert {x['id'] for x in after_attribute_update[0]['attributes']} == {colors[1]['id'],sizes[0]['id']}
+    print('PASS: reusable product attributes and values')
     _, inactive = call('PATCH',f'/api/v1/products/{pid}/status',{'active':False})
     assert inactive['active'] is False
     _, active = call('PATCH',f'/api/v1/products/{pid}/status',{'active':True})

@@ -244,6 +244,35 @@ protectedApi.MapGet("/products", async (ClaimsPrincipal principal, PosDbContext 
     if (!await HasPermission(principal, db, "products.read", ct)) return Results.Forbid();
     return Results.Ok(await catalog.ListAsync(q, ct));
 });
+protectedApi.MapGet("/attributes", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "products.read", ct) && !await HasPermission(principal, db, "products.write", ct)) return Results.Forbid();
+    return Results.Ok(await db.AttributeOptions.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Value)
+        .Select(x => new AttributeOptionDto(x.Id, x.Name, x.Value)).ToListAsync(ct));
+});
+protectedApi.MapPost("/attributes", async (ClaimsPrincipal principal, PosDbContext db, CreateAttributeRequest request, CancellationToken ct) =>
+{
+    if (!await HasPermission(principal, db, "products.write", ct)) return Results.Forbid();
+    var name = request.Name?.Trim();
+    var values = request.Values?.Select(v => v?.Trim()).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    if (string.IsNullOrWhiteSpace(name) || name.Length > 80 || values is null or { Length: 0 or > 30 } || values.Any(v => v!.Length > 100))
+        return Results.BadRequest(new { error = "Tên thuộc tính hoặc giá trị không hợp lệ" });
+    var nameKey = name.ToUpperInvariant();
+    var valueKeys = values.Select(v => v!.ToUpperInvariant()).ToArray();
+    var existing = await db.AttributeOptions.Where(x => x.NameKey == nameKey && valueKeys.Contains(x.ValueKey)).ToListAsync(ct);
+    var added = new List<AttributeOption>();
+    foreach (var value in values)
+    {
+        var key = value!.ToUpperInvariant();
+        if (existing.Any(x => x.ValueKey == key)) continue;
+        var option = new AttributeOption { Name = name, Value = value, NameKey = nameKey, ValueKey = key };
+        db.AttributeOptions.Add(option);
+        added.Add(option);
+    }
+    try { await db.SaveChangesAsync(ct); }
+    catch (DbUpdateException) { return Results.Conflict(new { error = "Giá trị thuộc tính vừa được thêm. Vui lòng tải lại." }); }
+    return Results.Ok(existing.Concat(added).Select(x => new AttributeOptionDto(x.Id, x.Name, x.Value)));
+});
 protectedApi.MapPost("/products", async (ClaimsPrincipal principal, PosDbContext db, ProductCatalog catalog, CreateProductRequest request, CancellationToken ct) =>
 {
     if (!await HasPermission(principal, db, "products.write", ct)) return Results.Forbid();
@@ -253,6 +282,9 @@ protectedApi.MapPost("/products", async (ClaimsPrincipal principal, PosDbContext
         return Results.Conflict(new { error = "SKU đã tồn tại" });
     if (!string.IsNullOrWhiteSpace(request.Barcode) && await db.Products.AnyAsync(p => p.Barcode == request.Barcode.Trim(), ct))
         return Results.Conflict(new { error = "Mã vạch đã tồn tại" });
+    var optionIds = request.AttributeOptionIds?.Distinct().ToArray() ?? [];
+    if (optionIds.Length > 40 || await db.AttributeOptions.CountAsync(x => optionIds.Contains(x.Id), ct) != optionIds.Length)
+        return Results.BadRequest(new { error = "Thuộc tính sản phẩm không hợp lệ" });
     try { return Results.Created("/api/v1/products", await catalog.CreateAsync(request, ct)); }
     catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
 });
@@ -273,6 +305,9 @@ protectedApi.MapPut("/products/{id:guid}", async (Guid id, ClaimsPrincipal princ
     var barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : request.Barcode.Trim();
     if (barcode is not null && await db.Products.AnyAsync(p => p.Barcode == barcode && p.Id != id, ct))
         return Results.Conflict(new { error = "Mã vạch đã tồn tại" });
+    var optionIds = request.AttributeOptionIds?.Distinct().ToArray() ?? [];
+    if (optionIds.Length > 40 || await db.AttributeOptions.CountAsync(x => optionIds.Contains(x.Id), ct) != optionIds.Length)
+        return Results.BadRequest(new { error = "Thuộc tính sản phẩm không hợp lệ" });
     product.Sku = sku;
     product.Barcode = barcode;
     product.Name = name;
@@ -281,10 +316,15 @@ protectedApi.MapPut("/products/{id:guid}", async (Guid id, ClaimsPrincipal princ
     product.SalePrice = request.SalePrice;
     product.CostPrice = request.CostPrice;
     product.CategoryId = request.CategoryId;
+    var oldSelections = await db.ProductAttributeSelections.Where(x => x.ProductId == id).ToListAsync(ct);
+    db.ProductAttributeSelections.RemoveRange(oldSelections.Where(x => !optionIds.Contains(x.OptionId)));
+    var oldIds = oldSelections.Select(x => x.OptionId).ToHashSet();
+    db.ProductAttributeSelections.AddRange(optionIds.Where(x => !oldIds.Contains(x))
+        .Select(x => new ProductAttributeSelection { ProductId = id, OptionId = x }));
     product.UpdatedAt = DateTimeOffset.UtcNow;
     db.AuditEvents.Add(new AuditEvent { ActorId = Guid.Parse(principal.FindFirstValue(JwtRegisteredClaimNames.Sub)!), Action = "PRODUCT_UPDATED", SubjectId = id });
     await db.SaveChangesAsync(ct);
-    return Results.Ok(new { product.Id, product.Sku, product.Barcode, product.Name, product.Unit, product.ReorderLevel, product.SalePrice, product.CostPrice, product.CategoryId, product.Active });
+    return Results.Ok(new { product.Id, product.Sku, product.Barcode, product.Name, product.Unit, product.ReorderLevel, product.SalePrice, product.CostPrice, product.CategoryId, product.Active, AttributeOptionIds = optionIds });
 });
 protectedApi.MapPatch("/products/{id:guid}/status", async (Guid id, ClaimsPrincipal principal, PosDbContext db, ActiveStatusRequest request, CancellationToken ct) =>
 {
@@ -1010,6 +1050,7 @@ sealed record SetEmployeeStatusRequest(bool Active);
 sealed record ResetEmployeePasswordRequest(string Password);
 sealed record ActiveStatusRequest(bool Active);
 sealed record CreateCategoryRequest(string Name, Guid? ParentId);
+sealed record CreateAttributeRequest(string Name, string[]? Values);
 sealed record CreateCustomerRequest(string FullName, string? Phone, string? Email);
 sealed record CreateSupplierRequest(string Code, string Name, string? Phone, string? Email);
 sealed record CountStocktakeItemRequest(decimal ActualQuantity);

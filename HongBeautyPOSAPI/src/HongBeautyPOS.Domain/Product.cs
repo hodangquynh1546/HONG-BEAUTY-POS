@@ -29,4 +29,6 @@ public sealed class Product
 	public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
 	public StockBalance? Balance { get; set; }
+
+	public ICollection<ProductAttributeSelection> AttributeSelections { get; set; } = new List<ProductAttributeSelection>();
 }

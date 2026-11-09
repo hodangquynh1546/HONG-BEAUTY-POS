@@ -1,4 +1,6 @@
 import json, os, secrets, subprocess, time, urllib.request, urllib.error
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
@@ -111,6 +113,13 @@ try:
     assert json.loads(employee_creation['detailsJson'])['hasAvatar'] is True
     permission_change = next(event for event in audit if event['action'] == 'EMPLOYEE_PERMISSIONS_REPLACED')
     assert json.loads(permission_change['detailsJson']) == {'oldPermissions':['products.read'], 'newPermissions':['products.read','reports.read']}
+    _, filtered_audit = call('GET',f"/api/v1/audit-events?kind=EMPLOYEE&actorId={employee_creation['actorId']}&search=Test%20Employee&take=2")
+    assert len(filtered_audit) == 2 and all(event['action'].startswith('EMPLOYEE_') for event in filtered_audit)
+    _, next_audit = call('GET',f"/api/v1/audit-events?kind=EMPLOYEE&actorId={employee_creation['actorId']}&search=Test%20Employee&skip=2&take=2")
+    assert next_audit and not {event['id'] for event in filtered_audit}.intersection(event['id'] for event in next_audit)
+    future_day = (datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')) + timedelta(days=2)).date().isoformat()
+    _, future_audit = call('GET',f'/api/v1/audit-events?from={future_day}')
+    assert future_audit == []
     token = employee_auth['accessToken']
     try:
         call('GET','/api/v1/products')

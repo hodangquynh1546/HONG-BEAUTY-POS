@@ -1069,10 +1069,44 @@ protectedApi.MapPut("/employees/{id:guid}/password", async (ClaimsPrincipal prin
     return Results.NoContent();
 });
 
-protectedApi.MapGet("/audit-events", async (ClaimsPrincipal principal, PosDbContext db, CancellationToken ct) =>
+protectedApi.MapGet("/audit-events", async (ClaimsPrincipal principal, PosDbContext db, DateOnly? from, DateOnly? to, string? kind, Guid? actorId, string? search, int? skip, int? take, CancellationToken ct) =>
 {
     if (!await IsOwner(principal, db, ct)) return Results.Forbid();
-    var events = await db.AuditEvents.AsNoTracking().OrderByDescending(e => e.CreatedAt).Take(100).ToListAsync(ct);
+    var kinds = new[] { "EMPLOYEE", "PRODUCT", "CATEGORY", "CUSTOMER", "SUPPLIER", "SALE", "CASH", "STOCKTAKE", "PROFILE", "PASSWORD", "OWNER" };
+    if (from > to || to == DateOnly.MaxValue || (kind is not null && !kinds.Contains(kind, StringComparer.Ordinal)) ||
+        (skip ?? 0) < 0 || (take ?? 100) is < 1 or > 100 || search?.Length > 100)
+        return Results.BadRequest(new { error = "Bộ lọc nhật ký không hợp lệ" });
+    var query = db.AuditEvents.AsNoTracking().AsQueryable();
+    var zone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
+    if (from.HasValue)
+    {
+        var start = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(from.Value.ToDateTime(TimeOnly.MinValue), zone));
+        query = query.Where(e => e.CreatedAt >= start);
+    }
+    if (to.HasValue)
+    {
+        var end = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(to.Value.AddDays(1).ToDateTime(TimeOnly.MinValue), zone));
+        query = query.Where(e => e.CreatedAt < end);
+    }
+    if (kind is not null) query = query.Where(e => e.Action.StartsWith(kind + "_"));
+    if (actorId.HasValue) query = query.Where(e => e.ActorId == actorId.Value);
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var term = search.Trim();
+        var pattern = "%" + term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+        query = query.Where(e =>
+            db.Users.Any(u => u.Id == e.ActorId && (EF.Functions.ILike(u.FullName, pattern, "\\") || EF.Functions.ILike(u.Email, pattern, "\\"))) ||
+            db.Users.Any(u => u.Id == e.SubjectId && EF.Functions.ILike(u.FullName, pattern, "\\")) ||
+            db.Products.Any(p => p.Id == e.SubjectId && (EF.Functions.ILike(p.Name, pattern, "\\") || EF.Functions.ILike(p.Sku, pattern, "\\"))) ||
+            db.Categories.Any(c => c.Id == e.SubjectId && EF.Functions.ILike(c.Name, pattern, "\\")) ||
+            db.Customers.Any(c => c.Id == e.SubjectId && EF.Functions.ILike(c.FullName, pattern, "\\")) ||
+            db.CustomerGroups.Any(g => g.Id == e.SubjectId && EF.Functions.ILike(g.Name, pattern, "\\")) ||
+            db.Suppliers.Any(s => s.Id == e.SubjectId && (EF.Functions.ILike(s.Name, pattern, "\\") || EF.Functions.ILike(s.Code, pattern, "\\"))) ||
+            db.SalesOrders.Any(o => o.Id == e.SubjectId && EF.Functions.ILike(o.OrderNo, pattern, "\\")) ||
+            db.CashEntries.Any(c => c.Id == e.SubjectId && EF.Functions.ILike(c.Description, pattern, "\\")));
+    }
+    var events = await query.OrderByDescending(e => e.CreatedAt).ThenByDescending(e => e.Id)
+        .Skip(skip ?? 0).Take(take ?? 100).ToListAsync(ct);
     var ids = events.SelectMany(e => new[] { e.ActorId, e.SubjectId }).Distinct().ToArray();
     var users = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
     var products = await db.Products.AsNoTracking().Where(p => ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Name, ct);

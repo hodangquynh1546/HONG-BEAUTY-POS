@@ -46,6 +46,12 @@ export class App implements OnInit {
   readonly suppliers = signal<Supplier[]>([]);
   readonly employees = signal<Employee[]>([]);
   readonly auditEvents = signal<AuditEvent[]>([]);
+  readonly auditHasMore = signal(false);
+  auditFrom = '';
+  auditTo = '';
+  auditKind = '';
+  auditActorId = '';
+  auditSearch = '';
   readonly cashEntries = signal<CashEntry[]>([]);
   readonly availablePermissions = signal<string[]>([]);
   readonly selectedEmployeeId = signal('');
@@ -490,7 +496,7 @@ export class App implements OnInit {
       if (this.api.user()?.role === 'Owner') {
         await attempt('nhân viên', async () => this.employees.set(await this.api.get<Employee[]>('/employees')));
         await attempt('danh sách quyền', async () => this.availablePermissions.set(await this.api.get<string[]>('/permissions')));
-        await attempt('nhật ký', async () => this.auditEvents.set(await this.api.get<AuditEvent[]>('/audit-events')));
+        await attempt('nhật ký', async () => this.fetchAuditEvents(true));
       }
       if (failed.length) this.error.set(`Không tải được: ${failed.join(', ')}. Các phần khác vẫn sử dụng được; bấm Làm mới để thử lại.`);
     } catch { this.error.set('Không tải được dữ liệu. Vui lòng thử lại.'); }
@@ -1019,6 +1025,35 @@ export class App implements OnInit {
   openAuditDetail(event: AuditEvent): void {
     this.selectedAuditEvent.set(event);
     this.openOverlay('auditDetail');
+  }
+
+  private async fetchAuditEvents(reset: boolean): Promise<void> {
+    const params = new URLSearchParams({ skip: String(reset ? 0 : this.auditEvents().length), take: '51' });
+    if (this.auditFrom) params.set('from', this.auditFrom);
+    if (this.auditTo) params.set('to', this.auditTo);
+    if (this.auditKind) params.set('kind', this.auditKind);
+    if (this.auditActorId) params.set('actorId', this.auditActorId);
+    if (this.auditSearch.trim()) params.set('search', this.auditSearch.trim());
+    const items = await this.api.get<AuditEvent[]>(`/audit-events?${params.toString()}`);
+    const visible = items.slice(0, 50);
+    this.auditEvents.set(reset ? visible : [...this.auditEvents(), ...visible]);
+    this.auditHasMore.set(items.length > 50);
+  }
+
+  async applyAuditFilters(reset = true): Promise<void> {
+    if (this.auditFrom && this.auditTo && this.auditFrom > this.auditTo) {
+      this.error.set('Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.');
+      return;
+    }
+    this.loading.set(true); this.error.set('');
+    try { await this.fetchAuditEvents(reset); }
+    catch (error) { this.error.set(this.apiErrorMessage(error, 'Không tải được nhật ký theo bộ lọc.')); }
+    finally { this.loading.set(false); }
+  }
+
+  resetAuditFilters(): void {
+    this.auditFrom = this.auditTo = this.auditKind = this.auditActorId = this.auditSearch = '';
+    void this.applyAuditFilters();
   }
 
   auditDetailRows(event: AuditEvent): { label: string; value: string }[] {

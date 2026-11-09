@@ -15,6 +15,7 @@ type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' |
 export class App implements OnInit {
   readonly page = signal<Page>('overview');
   readonly products = signal<Product[]>([]);
+  readonly posProducts = signal<Product[]>([]);
   readonly categories = signal<Category[]>([]);
   readonly customers = signal<Customer[]>([]);
   readonly customerTotal = signal(0);
@@ -50,6 +51,7 @@ export class App implements OnInit {
   editingCustomerId = '';
   customerSearch = '';
   posCustomerSearch = '';
+  posProductSearch = '';
   orderSearch = '';
   orderStatus = '';
   orderFrom = '';
@@ -120,6 +122,33 @@ export class App implements OnInit {
     finally { this.loading.set(false); }
   }
 
+  async searchPosProducts(): Promise<void> {
+    this.loading.set(true); this.error.set('');
+    try {
+      const found = this.posProductSearch.trim()
+        ? await this.api.get<Product[]>(`/products?q=${encodeURIComponent(this.posProductSearch.trim())}`)
+        : this.products();
+      this.products.update(current => [...current, ...found.filter(p => !current.some(item => item.id === p.id))]);
+      this.posProducts.set(found);
+    } catch { this.error.set('Không tìm được sản phẩm. Vui lòng thử lại.'); }
+    finally { this.loading.set(false); }
+  }
+
+  async scanPosBarcode(): Promise<void> {
+    this.error.set('');
+    try {
+      const { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHintALLOption } = await import('@capacitor/barcode-scanner');
+      const result = await CapacitorBarcodeScanner.scanBarcode({ hint: CapacitorBarcodeScannerTypeHintALLOption.ALL });
+      const barcode = result.ScanResult?.trim();
+      if (!barcode) return;
+      const found = await this.api.get<Product[]>(`/products?q=${encodeURIComponent(barcode)}`);
+      const product = found.find(p => p.barcode === barcode && p.active && p.quantity > 0);
+      if (!product) { this.error.set(`Không có sản phẩm đang bán với mã vạch ${barcode}.`); return; }
+      this.products.update(current => current.some(p => p.id === product.id) ? current : [...current, product]);
+      this.changeCart(product.id, 1);
+    } catch { this.error.set('Không quét được mã vạch. Kiểm tra quyền camera rồi thử lại.'); }
+  }
+
   private async loadOrders(reset: boolean): Promise<void> {
     const params = new URLSearchParams({ skip: String(reset ? 0 : this.orders().length), take: '50' });
     if (this.orderSearch.trim()) params.set('q', this.orderSearch.trim());
@@ -154,6 +183,7 @@ export class App implements OnInit {
     try {
       if (this.api.can('products.read')) {
         this.products.set(await this.api.get<Product[]>('/products'));
+        this.posProducts.set(this.products());
         this.categories.set(await this.api.get<Category[]>('/categories'));
       }
       if (this.api.can('customers.read')) {

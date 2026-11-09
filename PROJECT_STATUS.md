@@ -18,6 +18,7 @@
 - Tìm khách hàng theo tên, số điện thoại hoặc email có phân trang; màn hình khách hàng và quầy bán có ô tìm. PostgreSQL smoke test xác nhận lọc, phân trang, ký tự `%` là chữ thường, chặn tham số sai và yêu cầu đăng nhập.
 - Tìm đơn hàng theo mã, trạng thái, ngày Việt Nam và người bán, có phân trang. PostgreSQL smoke test xác nhận lọc, phân trang, chặn tham số sai, chặn truy cập ẩn danh và chỉ Chủ sở hữu được lọc theo người bán.
 - Sản phẩm có mã vạch, đơn vị tính và ngưỡng cảnh báo tồn đi từ form tới API/database; tìm đúng mã vạch. PostgreSQL integration smoke test xác nhận tạo, đọc, sửa và tìm mã vạch cùng các luồng nghiệp vụ cũ.
+- POS mobile có nút quét mã vạch bằng camera qua plugin Capacitor; mã quét được tra trên API thực rồi thêm sản phẩm đang bán vào giỏ. Angular build và đồng bộ native Android/iOS đạt; chưa kiểm thử camera trên thiết bị thật hoặc build APK/IPA.
 - Sửa khởi động Render khi chưa có biến `OWNER_*`: dịch vụ ghi cảnh báo và vẫn chạy; khi nhập đủ thông tin hợp lệ rồi triển khai lại thì tạo Chủ sở hữu. PostgreSQL smoke test trên database mới xác nhận `/health` trả 200 trước khi thiết lập, đăng nhập trả 401 trước và 200 sau khi nhập thông tin.
 
 ## Chưa xác minh

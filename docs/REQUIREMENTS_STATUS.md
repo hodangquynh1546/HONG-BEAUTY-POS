@@ -14,7 +14,7 @@ Kiểm tra trên source ở nhánh `main` ngày 2026-11-09. `training-doc.md` kh
 | Khách hàng và nhà cung cấp | Có CRUD/status và tìm khách theo tên/điện thoại/email | Thiếu lịch sử giao dịch/công nợ, phân nhóm, xuất Excel và tìm nhà cung cấp |
 | Thu chi và báo cáo | Có cash entries và summary từ database; tách doanh thu, tiền thu, giá vốn | Thiếu phân loại/đối soát nâng cao, báo cáo ngày/nhân viên/sản phẩm, Excel/PDF |
 | Cài đặt, audit, backup | Có audit events và biến môi trường thiết yếu | Thiếu giao diện cấu hình cửa hàng, backup/restore và chính sách lưu dữ liệu lâu dài |
-| Mobile | Có source Android/iOS Capacitor, dùng cùng Angular/API | Chưa build APK/IPA; thiếu camera barcode, thông báo và tối ưu một số luồng một tay |
+| Mobile | Có source Android/iOS Capacitor, dùng cùng Angular/API; POS có nút quét camera bằng plugin native | Chưa build APK/IPA hoặc thử quét trên thiết bị; thiếu thông báo và tối ưu một số luồng một tay |
 | Docker, Render, Neon | Có Dockerfile, `docker-compose.yml`, `render.yaml` và hướng dẫn | Docker engine vắng trong môi trường này nên chưa chạy thử Compose; chưa xác minh Render/Neon thật |
 | Kiểm thử | Có integration smoke trên PostgreSQL cục bộ và build .NET/Angular | Thiếu unit suite, API integration suite đầy đủ và E2E 19 bước; chưa đạt điều kiện nghiệm thu cuối |
 

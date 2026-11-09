@@ -111,8 +111,9 @@
       }
       @if (page() === 'pos') {
         <div class="columns"><section class="panel grow"><h2>Chọn sản phẩm</h2>
-          @if (products().length) { <div class="product-grid">@for (product of products(); track product.id) { @if (product.active && product.quantity > 0) { <button class="product-card" (click)="changeCart(product.id, 1)"><span class="product-icon">{{ product.name.slice(0, 2).toUpperCase() }}</span><b>{{ product.name }}</b><strong>{{ product.salePrice | currency:'VND':'symbol':'1.0-0' }}</strong><small>Còn {{ product.quantity }}</small></button> } }</div> }
-          @else { <div class="empty">Chưa có sản phẩm. Hãy tạo sản phẩm và nhập kho.</div> }
+          <div class="search-row"><input name="posProductSearch" [(ngModel)]="posProductSearch" (keyup.enter)="searchPosProducts()" placeholder="Tên, SKU hoặc mã vạch"><button class="refresh" [disabled]="loading()" (click)="searchPosProducts()">Tìm</button>@if (api.isNative) { <button class="refresh" [disabled]="loading()" (click)="scanPosBarcode()">Quét camera</button> }</div>
+          @if (posProducts().length) { <div class="product-grid">@for (product of posProducts(); track product.id) { @if (product.active && product.quantity > 0) { <button class="product-card" (click)="changeCart(product.id, 1)"><span class="product-icon">{{ product.name.slice(0, 2).toUpperCase() }}</span><b>{{ product.name }}</b><strong>{{ product.salePrice | currency:'VND':'symbol':'1.0-0' }}</strong><small>Còn {{ product.quantity }}</small></button> } }</div> }
+          @else { <div class="empty">Không tìm thấy sản phẩm đang bán.</div> }
         </section><section class="panel form-panel"><h2>Giỏ hàng</h2>
           @if (pendingOrderId) { <p class="hint">Đơn đã tạo. Tiếp tục thanh toán bằng cùng mã giao dịch.</p> }
           @if (cartItems().length) { @for (item of cartItems(); track item.id) { <div class="cart-row"><div><b>{{ item.name }}</b><small>{{ item.salePrice | currency:'VND':'symbol':'1.0-0' }}</small></div><div class="cart-qty"><button (click)="changeCart(item.id, -1)">−</button><span>{{ cart()[item.id] }}</span><button (click)="changeCart(item.id, 1)">+</button></div></div> } }

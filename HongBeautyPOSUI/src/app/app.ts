@@ -5,7 +5,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type AttributeOption, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type CustomerGroup, type Supplier, type CashEntry } from './core/api.service';
 
 type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit';
-type Overlay = 'account' | 'product' | 'category' | 'customer' | 'supplier' | 'employee' | 'permissions' | 'stock' | 'purchase' | 'cash' | 'return' | 'auditDetail' | null;
+type Overlay = 'account' | 'product' | 'customer' | 'permissions' | 'stock' | 'cash' | 'return' | 'auditDetail' | null;
 
 @Component({
   selector: 'app-root',
@@ -109,6 +109,17 @@ export class App implements OnInit {
   quickPosCustomerOpen = false;
   quickPosCustomer = { fullName: '', phone: '', email: '' };
   posProductSearch = '';
+  productListSearch = '';
+  productListCategory = '';
+  productListStock = '';
+  categoryListSearch = '';
+  categoryListStatus = '';
+  categoryListParent = '';
+  purchaseListSearch = '';
+  purchaseListStatus = '';
+  purchaseListSupplier = '';
+  purchaseListFrom = '';
+  purchaseListTo = '';
   orderSearch = '';
   orderStatus = '';
   orderFrom = '';
@@ -141,8 +152,45 @@ export class App implements OnInit {
 
   constructor(readonly api: ApiService) {}
 
+  filteredProducts(): Product[] {
+    const term = this.productListSearch.trim().toLocaleLowerCase('vi');
+    return this.products().filter(product =>
+      (!term || [product.name, product.sku, product.barcode ?? ''].some(value => value.toLocaleLowerCase('vi').includes(term))) &&
+      (!this.productListCategory || product.categoryId === this.productListCategory) &&
+      (!this.productListStock || (this.productListStock === 'active' ? product.active :
+        this.productListStock === 'inactive' ? !product.active :
+        this.productListStock === 'out' ? product.active && product.quantity <= 0 :
+        this.productListStock === 'low' ? product.active && product.quantity > 0 && product.quantity <= product.reorderLevel : true)));
+  }
+
+  filteredCategories(): Category[] {
+    const term = this.categoryListSearch.trim().toLocaleLowerCase('vi');
+    return this.categories().filter(category =>
+      (!term || category.name.toLocaleLowerCase('vi').includes(term)) &&
+      (!this.categoryListParent || (this.categoryListParent === 'root' ? !category.parentId : category.parentId === this.categoryListParent)) &&
+      (!this.categoryListStatus || (this.categoryListStatus === 'active' ? category.active : !category.active)));
+  }
+
+  filteredPurchases(): PurchaseReceipt[] {
+    const term = this.purchaseListSearch.trim().toLocaleLowerCase('vi');
+    return this.purchases().filter(receipt =>
+      (!term || receipt.receiptNo.toLocaleLowerCase('vi').includes(term)) &&
+      (!this.purchaseListStatus || receipt.status === this.purchaseListStatus) &&
+      (!this.purchaseListSupplier || receipt.supplierId === this.purchaseListSupplier) &&
+      (!this.purchaseListFrom || this.vietnamDate(receipt.createdAt) >= this.purchaseListFrom) &&
+      (!this.purchaseListTo || this.vietnamDate(receipt.createdAt) <= this.purchaseListTo));
+  }
+
+  private vietnamDate(value: string): string {
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(value));
+  }
+
   categoryName(id: string | null): string {
     return id ? this.categories().find(category => category.id === id)?.name || '—' : '—';
+  }
+
+  supplierName(id: string | null): string {
+    return id ? this.suppliers().find(supplier => supplier.id === id)?.name || '—' : 'Không chọn';
   }
 
   productAttributeLabel(product: Product): string {
@@ -187,9 +235,7 @@ export class App implements OnInit {
   closeOverlay(): void {
     if (this.loading()) return;
     if (this.overlay() === 'product') this.cancelProductEdit();
-    if (this.overlay() === 'category') this.cancelCategoryEdit();
     if (this.overlay() === 'customer') this.cancelCustomerEdit();
-    if (this.overlay() === 'supplier') this.cancelSupplierEdit();
     this.overlay.set(null);
     this.selectedEmployeeId.set('');
     this.returnOrderId = '';
@@ -216,9 +262,7 @@ export class App implements OnInit {
   }
 
   createProduct(): void { this.cancelProductEdit(); this.openOverlay('product'); }
-  createCategory(): void { this.cancelCategoryEdit(); this.error.set(''); }
   createCustomer(): void { this.cancelCustomerEdit(); this.openOverlay('customer'); }
-  createSupplier(): void { this.cancelSupplierEdit(); this.error.set(''); }
 
   async chooseProductImage(event: Event, target: 'product' | 'customer' | 'profile' | 'employee' = 'product'): Promise<void> {
     const input = event.target as HTMLInputElement;
@@ -766,7 +810,6 @@ export class App implements OnInit {
       await this.api.post('/purchases', { supplierId: this.selectedSupplierId || null, items: this.purchaseLines });
       this.purchaseLines = [{ productId: '', quantity: 1, unitCost: 0 }];
       this.selectedSupplierId = '';
-      this.overlay.set(null);
       this.notice.set('Đã tạo phiếu nhập nháp');
       await this.refresh();
     } catch { this.error.set('Không tạo được phiếu nhập. Kiểm tra sản phẩm, số lượng và giá vốn.'); }

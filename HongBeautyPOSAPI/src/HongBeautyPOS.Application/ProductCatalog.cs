@@ -27,6 +27,7 @@ public sealed class ProductCatalog(IProductRepository repository)
 		{
 			Sku = request.Sku.Trim(),
 			Barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : request.Barcode.Trim(),
+			ImageData = ProductImageRules.Normalize(request.ImageData),
 			Name = request.Name.Trim(),
 			Unit = request.Unit.Trim(),
 			ReorderLevel = request.ReorderLevel,

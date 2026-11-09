@@ -17,6 +17,7 @@ const api = {
   post: async (path, body) => {
     if (path === '/categories') return { id: 'new-category', name: body.name, parentId: null, active: true };
     if (path === '/attributes') return body.values.map((value, index) => ({ id: `new-option-${index}`, name: body.name, value }));
+    if (path === '/customers') return { id: 'new-customer', fullName: body.fullName, phone: body.phone, email: body.email, active: true };
     throw new Error(`Unexpected POST ${path}`);
   },
   get: async path => {
@@ -88,3 +89,12 @@ assert.equal(app.attributeOptions().length, 2);
 assert.deepEqual(Object.values(app.selectedAttributeOptions), [true, true]);
 assert.equal(app.overlay(), 'product');
 console.log('PASS: thêm nhanh danh mục và giá trị thuộc tính tự chọn vào sản phẩm');
+
+app.page.set('pos');
+app.quickPosCustomer = { fullName: 'Khách mới', phone: '0123456789', email: '' };
+app.quickPosCustomerOpen = true;
+await app.addPosCustomer();
+assert.equal(app.selectedCustomerId, 'new-customer');
+assert.equal(app.page(), 'pos');
+assert.equal(app.quickPosCustomerOpen, false);
+console.log('PASS: thêm khách tại quầy và tự chọn cho đơn bán');

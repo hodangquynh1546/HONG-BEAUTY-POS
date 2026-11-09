@@ -136,12 +136,14 @@ try:
     option_ids = [colors[0]['id'],colors[1]['id'],sizes[0]['id']]
     _, catalog_options = call('GET','/api/v1/attributes')
     assert len(catalog_options) == 3
+    image_data = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/n44AAAAASUVORK5CYII='
     barcode = '893' + str(secrets.randbelow(10**10)).zfill(10)
-    _, product = call('POST','/api/v1/products',{'sku':'TEST-' + secrets.token_hex(4),'barcode':barcode,'name':'Test lipstick','unit':'thỏi','reorderLevel':3,'salePrice':100,'costPrice':50,'attributeOptionIds':option_ids})
+    _, product = call('POST','/api/v1/products',{'sku':'TEST-' + secrets.token_hex(4),'barcode':barcode,'name':'Test lipstick','unit':'thỏi','reorderLevel':3,'salePrice':100,'costPrice':50,'attributeOptionIds':option_ids,'imageData':image_data})
     assert product['barcode'] == barcode and product['unit'] == 'thỏi' and product['reorderLevel'] == 3
     _, barcode_results = call('GET',f'/api/v1/products?q={barcode}')
     assert len(barcode_results) == 1 and barcode_results[0]['id'] == product['id']
     assert {x['id'] for x in barcode_results[0]['attributes']} == set(option_ids)
+    assert barcode_results[0]['imageData'] == image_data
     pid = product['id']
     token = employee_auth['accessToken']
     try:
@@ -155,6 +157,13 @@ try:
     assert updated['name'] == 'Updated lipstick'
     _, after_attribute_update = call('GET',f'/api/v1/products?q={barcode}')
     assert {x['id'] for x in after_attribute_update[0]['attributes']} == {colors[1]['id'],sizes[0]['id']}
+    assert after_attribute_update[0]['imageData'] == image_data
+    try:
+        call('PUT',f'/api/v1/products/{pid}',{'sku':product['sku'],'name':'Updated lipstick','salePrice':100,'costPrice':50,'imageData':'data:text/html;base64,PHNjcmlwdD4='})
+        raise AssertionError('Invalid product image accepted')
+    except RuntimeError as error:
+        assert 'HTTP 400' in str(error), error
+    print('PASS: product image stored and validated')
     print('PASS: reusable product attributes and values')
     _, inactive = call('PATCH',f'/api/v1/products/{pid}/status',{'active':False})
     assert inactive['active'] is False

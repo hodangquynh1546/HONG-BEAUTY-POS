@@ -91,6 +91,7 @@ public sealed class PosDbContext : DbContext
 			e.HasIndex((Product x) => x.Barcode).IsUnique();
 			e.Property((Product x) => x.Sku).HasMaxLength(100);
 			e.Property((Product x) => x.Name).HasMaxLength(240);
+			e.Property((Product x) => x.ImageData).HasColumnType("text");
 			e.Property((Product x) => x.CostPrice).HasPrecision(18, 2);
 			e.Property((Product x) => x.SalePrice).HasPrecision(18, 2);
 			e.Property((Product x) => x.ReorderLevel).HasPrecision(18, 3);

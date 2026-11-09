@@ -19,7 +19,7 @@ public sealed class ProductRepository(PosDbContext db) : IProductRepository
 			query = query.Where((Product p) => EF.Functions.ILike(p.Name, $"%{term}%") || EF.Functions.ILike(p.Sku, $"%{term}%") || p.Barcode == term);
 		}
 		var products = await (from p in query.OrderBy((Product p) => p.Name).Take(100)
-			select new ProductDto(p.Id, p.Sku, p.Name, p.SalePrice, p.CostPrice, (p.Balance == null) ? 0m : p.Balance.Quantity, p.Active, p.CategoryId, p.Barcode, p.Unit, p.ReorderLevel)).ToListAsync(cancellationToken);
+			select new ProductDto(p.Id, p.Sku, p.Name, p.SalePrice, p.CostPrice, (p.Balance == null) ? 0m : p.Balance.Quantity, p.Active, p.CategoryId, p.Barcode, p.Unit, p.ReorderLevel, null, p.ImageData)).ToListAsync(cancellationToken);
 		var ids = products.Select(p => p.Id).ToArray();
 		var selected = await (from choice in db.ProductAttributeSelections.AsNoTracking()
 			join option in db.AttributeOptions.AsNoTracking() on choice.OptionId equals option.Id
@@ -35,6 +35,6 @@ public sealed class ProductRepository(PosDbContext db) : IProductRepository
 	{
 		db.Products.Add(product);
 		await db.SaveChangesAsync(cancellationToken);
-		return new ProductDto(product.Id, product.Sku, product.Name, product.SalePrice, product.CostPrice, 0m, product.Active, product.CategoryId, product.Barcode, product.Unit, product.ReorderLevel);
+		return new ProductDto(product.Id, product.Sku, product.Name, product.SalePrice, product.CostPrice, 0m, product.Active, product.CategoryId, product.Barcode, product.Unit, product.ReorderLevel, null, product.ImageData);
 	}
 }

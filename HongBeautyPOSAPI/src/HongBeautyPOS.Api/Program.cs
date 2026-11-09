@@ -305,11 +305,15 @@ protectedApi.MapPut("/products/{id:guid}", async (Guid id, ClaimsPrincipal princ
     var barcode = string.IsNullOrWhiteSpace(request.Barcode) ? null : request.Barcode.Trim();
     if (barcode is not null && await db.Products.AnyAsync(p => p.Barcode == barcode && p.Id != id, ct))
         return Results.Conflict(new { error = "Mã vạch đã tồn tại" });
+    string? imageData;
+    try { imageData = request.ImageData is null ? product.ImageData : ProductImageRules.Normalize(request.ImageData); }
+    catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
     var optionIds = request.AttributeOptionIds?.Distinct().ToArray() ?? [];
     if (optionIds.Length > 40 || await db.AttributeOptions.CountAsync(x => optionIds.Contains(x.Id), ct) != optionIds.Length)
         return Results.BadRequest(new { error = "Thuộc tính sản phẩm không hợp lệ" });
     product.Sku = sku;
     product.Barcode = barcode;
+    product.ImageData = imageData;
     product.Name = name;
     product.Unit = request.Unit.Trim();
     product.ReorderLevel = request.ReorderLevel;
@@ -436,7 +440,7 @@ protectedApi.MapPost("/customers", async (ClaimsPrincipal principal, PosDbContex
     var customer = new Customer { FullName = name, Phone = phone, Email = email };
     db.Customers.Add(customer);
     await db.SaveChangesAsync(ct);
-    return Results.Created($"/api/v1/customers/{customer.Id}", new { customer.Id, customer.FullName, customer.Phone, customer.Email });
+    return Results.Created($"/api/v1/customers/{customer.Id}", new { customer.Id, customer.FullName, customer.Phone, customer.Email, customer.Active });
 });
 protectedApi.MapPut("/customers/{id:guid}", async (Guid id, ClaimsPrincipal principal, PosDbContext db, CreateCustomerRequest request, CancellationToken ct) =>
 {

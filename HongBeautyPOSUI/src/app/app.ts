@@ -4,7 +4,7 @@ import { CurrencyPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type AttributeOption, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type Supplier, type CashEntry } from './core/api.service';
 
-type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit' | 'account';
+type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit';
 type Overlay = 'account' | 'product' | 'category' | 'customer' | 'supplier' | 'employee' | 'permissions' | 'stock' | 'purchase' | 'cash' | 'return' | null;
 
 @Component({
@@ -76,7 +76,7 @@ export class App implements OnInit {
   email = '';
   password = '';
   serverUrlInput = '';
-  newProduct = { sku: '', barcode: '', name: '', unit: 'cái', reorderLevel: 0, salePrice: 0, costPrice: 0, categoryId: '' };
+  newProduct = { sku: '', barcode: '', name: '', unit: 'cái', reorderLevel: 0, salePrice: 0, costPrice: 0, categoryId: '', imageData: '' };
   editingProductId = '';
   newCategory = { name: '', parentId: '' };
   editingCategoryId = '';
@@ -84,6 +84,8 @@ export class App implements OnInit {
   editingCustomerId = '';
   customerSearch = '';
   posCustomerSearch = '';
+  quickPosCustomerOpen = false;
+  quickPosCustomer = { fullName: '', phone: '', email: '' };
   posProductSearch = '';
   orderSearch = '';
   orderStatus = '';
@@ -185,6 +187,34 @@ export class App implements OnInit {
   createCustomer(): void { this.cancelCustomerEdit(); this.openOverlay('customer'); }
   createSupplier(): void { this.cancelSupplierEdit(); this.openOverlay('supplier'); }
 
+  async chooseProductImage(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/') || file.size > 10_000_000) { this.error.set('Chọn ảnh dưới 10 MB.'); input.value = ''; return; }
+    const url = URL.createObjectURL(file);
+    try {
+      const photo = new Image();
+      photo.src = url;
+      await photo.decode();
+      const scale = Math.min(1, 640 / Math.max(photo.naturalWidth, photo.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(photo.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(photo.naturalHeight * scale));
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Không xử lý được ảnh.');
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(photo, 0, 0, canvas.width, canvas.height);
+      let image = canvas.toDataURL('image/jpeg', .78);
+      if (image.length > 210_000) image = canvas.toDataURL('image/jpeg', .55);
+      if (image.length > 210_000) throw new Error('Ảnh sau khi nén vẫn quá lớn. Hãy chọn ảnh đơn giản hơn.');
+      this.newProduct.imageData = image;
+      this.error.set('');
+    } catch (error) { this.error.set(error instanceof Error ? error.message : 'Không đọc được ảnh.'); }
+    finally { URL.revokeObjectURL(url); input.value = ''; }
+  }
+
   async addQuickCategory(): Promise<void> {
     if (!this.quickCategoryName.trim()) return;
     this.loading.set(true); this.error.set('');
@@ -259,6 +289,21 @@ export class App implements OnInit {
     this.loading.set(true); this.error.set('');
     try { await this.loadPosCustomers(); }
     catch { this.error.set('Không tìm được khách hàng. Vui lòng thử lại.'); }
+    finally { this.loading.set(false); }
+  }
+
+  async addPosCustomer(): Promise<void> {
+    if (!this.api.can('customers.write')) return;
+    this.loading.set(true); this.error.set('');
+    try {
+      const customer = await this.api.post<Customer>('/customers', this.quickPosCustomer);
+      this.posCustomers.set([customer, ...this.posCustomers()]);
+      this.customers.set([customer, ...this.customers()]);
+      this.selectedCustomerId = customer.id;
+      this.quickPosCustomer = { fullName: '', phone: '', email: '' };
+      this.quickPosCustomerOpen = false;
+      this.notice.set('Đã thêm và chọn khách hàng cho đơn bán.');
+    } catch { this.error.set('Không thêm được khách hàng. Kiểm tra tên, số điện thoại và email.'); }
     finally { this.loading.set(false); }
   }
 
@@ -372,14 +417,14 @@ export class App implements OnInit {
 
   editProduct(product: Product): void {
     this.editingProductId = product.id;
-    this.newProduct = { sku: product.sku, barcode: product.barcode ?? '', name: product.name, unit: product.unit, reorderLevel: product.reorderLevel, salePrice: product.salePrice, costPrice: product.costPrice, categoryId: product.categoryId ?? '' };
+    this.newProduct = { sku: product.sku, barcode: product.barcode ?? '', name: product.name, unit: product.unit, reorderLevel: product.reorderLevel, salePrice: product.salePrice, costPrice: product.costPrice, categoryId: product.categoryId ?? '', imageData: product.imageData ?? '' };
     this.selectedAttributeOptions = Object.fromEntries((product.attributes ?? []).map(x => [x.id, true]));
     this.openOverlay('product');
   }
 
   cancelProductEdit(): void {
     this.editingProductId = '';
-    this.newProduct = { sku: '', barcode: '', name: '', unit: 'cái', reorderLevel: 0, salePrice: 0, costPrice: 0, categoryId: '' };
+    this.newProduct = { sku: '', barcode: '', name: '', unit: 'cái', reorderLevel: 0, salePrice: 0, costPrice: 0, categoryId: '', imageData: '' };
     this.selectedAttributeOptions = {};
     this.quickCategoryOpen = this.quickAttributeOpen = false;
     this.quickCategoryName = this.quickAttributeName = this.quickAttributeValues = '';

@@ -12,6 +12,8 @@ public sealed class Product
 
 	public string? Barcode { get; set; }
 
+	public string? ImageData { get; set; }
+
 	public required string Name { get; set; }
 
 	public string Unit { get; set; } = "cái";

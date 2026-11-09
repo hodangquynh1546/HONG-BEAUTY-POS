@@ -5,7 +5,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type AttributeOption, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type CustomerGroup, type Supplier, type CashEntry } from './core/api.service';
 
 type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit';
-type Overlay = 'account' | 'product' | 'customer' | 'permissions' | 'stock' | 'cash' | 'return' | 'auditDetail' | null;
+type Overlay = 'account' | 'product' | 'supplier' | 'customer' | 'permissions' | 'stock' | 'cash' | 'return' | 'auditDetail' | null;
 
 @Component({
   selector: 'app-root',
@@ -143,6 +143,7 @@ export class App implements OnInit {
   adjustment = { productId: '', delta: 0, reason: '' };
   purchaseLines = [{ productId: '', quantity: 1, unitCost: 0 }];
   selectedSupplierId = '';
+  private purchaseProductLineIndex: number | null = null;
   selectedCustomerId = '';
   actualByItem: Record<string, number> = {};
   paymentMethod: 'Cash' | 'BankTransfer' | 'QrBanking' = 'Cash';
@@ -243,6 +244,8 @@ export class App implements OnInit {
   closeOverlay(): void {
     if (this.loading()) return;
     if (this.overlay() === 'product') this.cancelProductEdit();
+    if (this.overlay() === 'product') this.purchaseProductLineIndex = null;
+    if (this.overlay() === 'supplier') this.cancelSupplierEdit();
     if (this.overlay() === 'customer') this.cancelCustomerEdit();
     this.overlay.set(null);
     this.selectedEmployeeId.set('');
@@ -269,7 +272,9 @@ export class App implements OnInit {
     else if (this.overlay()) this.closeOverlay();
   }
 
-  createProduct(): void { this.cancelProductEdit(); this.openOverlay('product'); }
+  createProduct(): void { this.purchaseProductLineIndex = null; this.cancelProductEdit(); this.openOverlay('product'); }
+  createPurchaseProduct(index: number): void { this.cancelProductEdit(); this.purchaseProductLineIndex = index; this.openOverlay('product'); }
+  createPurchaseSupplier(): void { this.cancelSupplierEdit(); this.openOverlay('supplier'); }
   createCustomer(): void { this.cancelCustomerEdit(); this.openOverlay('customer'); }
 
   private requestError(error: unknown, fallback: string): string {
@@ -535,12 +540,19 @@ export class App implements OnInit {
     try {
       const payload = { ...this.newProduct, categoryId: this.newProduct.categoryId || null,
         attributeOptionIds: Object.entries(this.selectedAttributeOptions).filter(([, selected]) => selected).map(([id]) => id) };
+      let created: Product | null = null;
       if (this.editingProductId) await this.api.put(`/products/${this.editingProductId}`, payload);
-      else await this.api.post('/products', payload);
+      else created = await this.api.post<Product>('/products', payload);
       this.notice.set(this.editingProductId ? 'Đã cập nhật sản phẩm' : 'Đã tạo sản phẩm');
       this.cancelProductEdit();
       this.overlay.set(null);
       await this.refresh();
+      if (created && this.purchaseProductLineIndex !== null && this.purchaseLines[this.purchaseProductLineIndex]) {
+        if (!this.products().some(product => product.id === created.id)) this.products.update(products => [...products, created!]);
+        this.purchaseLines[this.purchaseProductLineIndex].productId = created.id;
+        this.purchaseLines[this.purchaseProductLineIndex].unitCost = created.costPrice;
+      }
+      this.purchaseProductLineIndex = null;
     } catch (error) { this.error.set(this.requestError(error, 'Không lưu được sản phẩm. Kiểm tra SKU, danh mục và giá trị nhập.')); }
     finally { this.loading.set(false); }
   }
@@ -656,12 +668,18 @@ export class App implements OnInit {
   async saveSupplier(): Promise<void> {
     this.loading.set(true); this.error.set('');
     try {
+      let created: Supplier | null = null;
       if (this.editingSupplierId) await this.api.put(`/suppliers/${this.editingSupplierId}`, this.newSupplier);
-      else await this.api.post('/suppliers', this.newSupplier);
+      else created = await this.api.post<Supplier>('/suppliers', this.newSupplier);
       this.notice.set(this.editingSupplierId ? 'Đã cập nhật nhà cung cấp' : 'Đã tạo nhà cung cấp');
       this.cancelSupplierEdit();
+      if (this.overlay() === 'supplier') this.overlay.set(null);
       await this.refresh();
-    } catch { this.error.set('Không lưu được nhà cung cấp. Kiểm tra mã đã trùng hoặc thông tin nhập.'); }
+      if (created && this.page() === 'purchases') {
+        if (!this.suppliers().some(supplier => supplier.id === created.id)) this.suppliers.update(suppliers => [...suppliers, { ...created!, active: true }]);
+        this.selectedSupplierId = created.id;
+      }
+    } catch (error) { this.error.set(this.requestError(error, 'Không lưu được nhà cung cấp. Kiểm tra mã đã trùng hoặc thông tin nhập.')); }
     finally { this.loading.set(false); }
   }
 

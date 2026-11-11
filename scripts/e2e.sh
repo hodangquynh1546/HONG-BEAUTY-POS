@@ -25,9 +25,10 @@ docker run -d --rm --name "$NAME" -e POSTGRES_PASSWORD="$DB_PASSWORD" -e POSTGRE
 for _ in $(seq 1 40); do docker exec "$NAME" pg_isready -U postgres -d mieu_e2e >/dev/null 2>&1 && break; sleep 1; done
 sleep 2
 
+# Build the API before wwwroot exists: otherwise the static-web-assets manifest points at a folder that cleanup removes.
+dotnet build "$ROOT/HongBeautyPOSAPI/HongBeautyPOS.slnx" -v q >/dev/null
 (cd "$UI" && npx ng build >/dev/null)
 rm -rf "$API/wwwroot" && cp -R "$UI/dist/HongBeautyPOSUI/browser" "$API/wwwroot"
-dotnet build "$ROOT/HongBeautyPOSAPI/HongBeautyPOS.slnx" -v q >/dev/null
 
 export E2E_OWNER_EMAIL="owner-e2e@example.invalid"
 export E2E_OWNER_PASSWORD="E2e!$(openssl rand -hex 10)Aa"

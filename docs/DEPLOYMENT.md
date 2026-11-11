@@ -15,7 +15,7 @@
 
 ## Phiên đăng nhập
 
-Access token sống ngắn (`JWT_ACCESS_MINUTES`, mặc định 15 phút) và được app tự gia hạn bằng refresh token xoay vòng (`REFRESH_TOKEN_DAYS`, mặc định 30 ngày không hoạt động). Mỗi lần gia hạn cấp refresh token mới; dùng lại token cũ sau hơn 15 giây sẽ thu hồi toàn bộ phiên đó. Đổi hoặc đặt lại mật khẩu, khóa tài khoản và đăng xuất đều chấm dứt phiên. Refresh token chỉ lưu dạng băm trong bảng `refresh_tokens`.
+Access token sống ngắn (`JWT_ACCESS_MINUTES`, mặc định 15 phút) và được app tự gia hạn bằng refresh token xoay vòng (`REFRESH_TOKEN_DAYS`, mặc định 30 ngày không hoạt động). Mỗi lần gia hạn cấp refresh token mới; dùng lại token cũ sau hơn 15 giây sẽ thu hồi toàn bộ phiên đó. Đổi hoặc đặt lại mật khẩu, khóa tài khoản và đăng xuất đều chấm dứt phiên. Refresh token chỉ lưu dạng băm trong bảng `refresh_tokens`. Trình duyệt nhận refresh token qua cookie `HttpOnly; SameSite=Strict; Secure` (đường dẫn `/api/v1/auth`), script không đọc được, kèm header chống CSRF `X-Requested-With`. App Android/iOS khác origin nên gửi `X-Client: native` và tự giữ token. Cookie `Secure` chỉ được đặt khi yêu cầu đến qua HTTPS, vì vậy production bắt buộc có HTTPS và `FORWARDED_HEADERS_ENABLED=true` khi đứng sau proxy.
 
 ## Quên mật khẩu
 

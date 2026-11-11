@@ -6,10 +6,11 @@ import { Capacitor } from '@capacitor/core';
 export * from './models';
 import type { CurrentUser } from './models';
 
-interface SessionResponse { accessToken: string; refreshToken: string; role: 'Owner' | 'Employee'; expiresIn: number; }
+interface SessionResponse { accessToken: string; refreshToken?: string | null; role: 'Owner' | 'Employee'; expiresIn: number; }
 
 const ACCESS_KEY = 'hbpos_token';
-const REFRESH_KEY = 'hbpos_refresh';
+const REFRESH_KEY = 'hbpos_refresh';      // native apps only
+const SESSION_FLAG_KEY = 'hbpos_session';  // web: "a refresh cookie probably exists" (not a secret)
 const SERVER_KEY = 'hbpos_server_url';
 
 /** Tolerates blocked storage (private mode, restricted webviews). */
@@ -24,13 +25,28 @@ export class ApiService {
   readonly user = signal<CurrentUser | null>(null);
   /** Short-lived access token: tab-scoped. */
   private token = store.get(sessionStorage, ACCESS_KEY);
-  /** Long-lived rotating refresh token: survives closing the tab so staff stay signed in between shifts. */
-  private refreshToken = store.get(localStorage, REFRESH_KEY);
+  /**
+   * Long-lived rotating refresh token. In browsers it lives only in an HttpOnly cookie that scripts cannot read,
+   * so XSS cannot steal it; native apps (another origin, no reliable cookies) keep it themselves.
+   */
+  private refreshToken = Capacitor.isNativePlatform() ? store.get(localStorage, REFRESH_KEY) : '';
+  private webSession = !Capacitor.isNativePlatform() && store.get(localStorage, SESSION_FLAG_KEY) === '1';
   private refreshing: Promise<boolean> | null = null;
   readonly isNative = Capacitor.isNativePlatform();
   readonly serverUrl = signal(store.get(localStorage, SERVER_KEY));
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(private readonly http: HttpClient) {
+    // Remove the token an earlier build kept in localStorage.
+    if (!this.isNative) store.remove(localStorage, REFRESH_KEY);
+  }
+
+  private get canRefresh(): boolean { return this.isNative ? !!this.refreshToken : this.webSession; }
+
+  /** Headers for the auth endpoints: native opts out of cookies; browsers send the CSRF marker header. */
+  private authHeaders(): HttpHeaders {
+    return this.isNative ? new HttpHeaders({ 'X-Client': 'native' }) : new HttpHeaders({ 'X-Requested-With': 'mieu-web' });
+  }
+  private authBody(): { refreshToken?: string } { return this.isNative ? { refreshToken: this.refreshToken } : {}; }
 
   setServerUrl(value: string): void {
     let parsed: URL;
@@ -51,24 +67,25 @@ export class ApiService {
   }
 
   async restore(): Promise<void> {
-    if (!this.token && this.refreshToken) await this.refreshSession();
+    if (!this.token && this.canRefresh) await this.refreshSession();
     if (!this.token) return;
     try { this.user.set(await this.get<CurrentUser>('/me')); }
     catch { this.logout(); }
   }
 
   async login(email: string, password: string): Promise<void> {
-    const session = await firstValueFrom(this.http.post<SessionResponse>(`${this.base}/auth/login`, { email, password }));
+    const session = await firstValueFrom(this.http.post<SessionResponse>(`${this.base}/auth/login`, { email, password }, { headers: this.authHeaders(), withCredentials: true }));
     this.storeSession(session);
     this.user.set(await this.get<CurrentUser>('/me'));
   }
 
   /** Ends the session locally at once and revokes the refresh token on the server (best effort). */
   logout(): void {
-    const refreshToken = this.refreshToken;
+    const hadSession = this.canRefresh;
+    const body = this.authBody();
     this.clearSession();
-    if (refreshToken) {
-      try { void firstValueFrom(this.http.post(`${this.base}/auth/logout`, { refreshToken })).catch(() => undefined); }
+    if (hadSession) {
+      try { void firstValueFrom(this.http.post(`${this.base}/auth/logout`, body, { headers: this.authHeaders(), withCredentials: true })).catch(() => undefined); }
       catch { /* server URL not configured */ }
     }
   }
@@ -91,7 +108,7 @@ export class ApiService {
   private async request<T>(call: () => Observable<T>): Promise<T> {
     try { return await firstValueFrom(call()); }
     catch (error) {
-      if (!(error instanceof HttpErrorResponse) || error.status !== 401 || !this.refreshToken) throw this.expire(error);
+      if (!(error instanceof HttpErrorResponse) || error.status !== 401 || !this.canRefresh) throw this.expire(error);
       if (!await this.refreshSession()) throw this.expire(error);
       try { return await firstValueFrom(call()); }
       catch (retryError) { throw this.expire(retryError); }
@@ -107,7 +124,7 @@ export class ApiService {
   private refreshSession(): Promise<boolean> {
     this.refreshing ??= (async () => {
       try {
-        const session = await firstValueFrom(this.http.post<SessionResponse>(`${this.base}/auth/refresh`, { refreshToken: this.refreshToken }));
+        const session = await firstValueFrom(this.http.post<SessionResponse>(`${this.base}/auth/refresh`, this.authBody(), { headers: this.authHeaders(), withCredentials: true }));
         this.storeSession(session);
         return true;
       } catch (error) {
@@ -123,16 +140,23 @@ export class ApiService {
 
   private storeSession(session: SessionResponse): void {
     this.token = session.accessToken;
-    this.refreshToken = session.refreshToken;
     store.set(sessionStorage, ACCESS_KEY, this.token);
-    store.set(localStorage, REFRESH_KEY, this.refreshToken);
+    if (this.isNative) {
+      this.refreshToken = session.refreshToken ?? '';
+      store.set(localStorage, REFRESH_KEY, this.refreshToken);
+    } else {
+      this.webSession = true;
+      store.set(localStorage, SESSION_FLAG_KEY, '1');
+    }
   }
 
   private clearSession(): void {
     this.token = '';
     this.refreshToken = '';
+    this.webSession = false;
     store.remove(sessionStorage, ACCESS_KEY);
     store.remove(localStorage, REFRESH_KEY);
+    store.remove(localStorage, SESSION_FLAG_KEY);
     this.user.set(null);
   }
 

@@ -66,3 +66,48 @@ button:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+// ---- Alignment fixes -------------------------------------------------------
+// Search rows: input and icon button share one centre line (inputs carry a global margin-top).
+.search-row { align-items: center; }
+.search-row > input, .search-row > select { margin-top: 0; height: 43px; }
+.search-row > .icon-button { height: 43px; width: 43px; }
+
+// Filter bars: labels carry no bottom margin here, so the trailing icon button lines up with the inputs.
+.order-filters > label { margin: 0; }
+.order-filters > .icon-button { align-self: end; }
+
+// Icon buttons sitting side by side in a table cell get the same gap as the employee actions.
+table td > .icon-button + .icon-button { margin-left: 14px; }
+
+// ---- Phone: date filters ---------------------------------------------------
+@media (max-width: 650px) {
+  .shell .content input[type="date"] {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: 40px;
+    padding: 0 10px;
+    font-size: .88rem;
+    text-align: left;
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--surface);
+  }
+  .shell .content input[type="date"]::-webkit-date-and-time-value { text-align: left; min-height: 1.3em; }
+  .shell .content input[type="date"]::-webkit-calendar-picker-indicator { width: 18px; height: 18px; margin: 0 0 0 4px; padding: 0; }
+
+  // Two date fields side by side, everything else full width.
+  .shell .content .order-filters,
+  .shell .content .list-filters,
+  .shell .content .audit-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .shell .content .order-filters > label,
+  .shell .content .list-filters > label { min-width: 0; margin: 0; }
+  .shell .content .order-filters > .icon-button { grid-column: 1 / -1; justify-self: end; }
+
+  .shell .content .report-date-range,
+  .shell .content .dashboard-date-range { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
+  .shell .content .report-date-range .primary,
+  .shell .content .dashboard-date-range .apply-date-button { grid-column: 1 / -1; width: 100%; justify-self: stretch; height: 40px; }
+}

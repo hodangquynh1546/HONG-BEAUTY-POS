@@ -28,6 +28,20 @@ test.describe('Canh hàng giao diện @smoke', () => {
     expect(Math.abs(await centreY(row.locator('input')) - await centreY(row.locator('.icon-button')))).toBeLessThanOrEqual(1.5);
   });
 
+  test('nút "+" thêm nhanh thẳng hàng với ô chọn', async ({ page }) => {
+    const check = async (): Promise<void> => {
+      for (const row of await page.locator('.inline-heading:has(> label):visible').all()) {
+        const add = row.locator('.inline-add');
+        if (!await add.count()) continue;
+        expect(Math.abs(await centreY(row.locator('select')) - await centreY(add))).toBeLessThanOrEqual(1.5);
+      }
+    };
+    await openPage(page, 'Nhập hàng');
+    await check();
+    await openPage(page, 'Bán hàng');
+    await check();
+  });
+
   test('ô lọc ngày không tràn khung ở mọi kích thước', async ({ page }) => {
     for (const name of ['Đơn hàng', 'Nhập hàng', 'Báo cáo', 'Nhật ký']) {
       await openPage(page, name);

@@ -111,3 +111,14 @@ table td > .icon-button + .icon-button { margin-left: 14px; }
   .shell .content .report-date-range .primary,
   .shell .content .dashboard-date-range .apply-date-button { grid-column: 1 / -1; width: 100%; justify-self: stretch; height: 40px; }
 }
+
+// "+" quick-add buttons next to a select: the container owns the bottom gap, so the button lines up with the select.
+.inline-heading:has(> label) { align-items: flex-end; margin-bottom: 15px; }
+.inline-heading:has(> label) > label { margin: 0; }
+.inline-heading:has(> label) > .inline-add { margin: 0; flex: none; }
+.purchase-line .inline-heading.purchase-picker { margin-bottom: 10px; }
+@media (max-width: 650px) {
+  .inline-heading:has(> label) { margin-bottom: 9px; }
+  .inline-heading:has(> label) select { height: 40px; }
+  .inline-heading:has(> label) > .inline-add { width: 40px; height: 40px; min-width: 40px; }
+}

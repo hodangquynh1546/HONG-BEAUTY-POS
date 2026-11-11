@@ -24,6 +24,12 @@ test.describe('Phiên đăng nhập: cookie HttpOnly (web)', () => {
     expect(cookie).toContain('path=/api/v1/auth');
   });
 
+  test('sau proxy HTTPS (Caddy/ALB) cookie có thêm thuộc tính Secure', async ({ request }) => {
+    const response = await post(request, 'login', { ...WEB, 'X-Forwarded-Proto': 'https' }, credentials);
+    const cookie = response.headersArray().find(h => h.name.toLowerCase() === 'set-cookie')!.value;
+    expect(cookie).toMatch(/;\s*secure/i);
+  });
+
   test('làm mới bằng cookie xoay vòng token; thiếu header chống CSRF thì bị từ chối', async ({ request }) => {
     await post(request, 'login', WEB, credentials);
     expect((await post(request, 'refresh', {})).status()).toBe(401);           // no CSRF header

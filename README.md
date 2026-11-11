@@ -36,6 +36,10 @@ Từ `HongBeautyPOSUI`: `npx playwright install chromium` (một lần) rồi `n
 
 Production chưa sẵn sàng. Luồng cốt lõi đã được kiểm thử trên PostgreSQL cục bộ, nhưng Docker, build native Android/iOS và các phân hệ còn thiếu trong `PROJECT_STATUS.md` chưa được xác minh. Chưa nên dùng cho dữ liệu kinh doanh thật.
 
+## AWS
+
+Hướng dẫn từng bước triển khai lên một máy EC2 (Docker Compose + Caddy HTTPS + sao lưu S3): [docs/AWS-DEPLOY.md](docs/AWS-DEPLOY.md).
+
 ## Render và Neon
 
 `render.yaml` định nghĩa một dịch vụ Docker chạy web và API cùng địa chỉ, tự áp dụng migration trước khi nhận truy cập. Xem [hướng dẫn triển khai](docs/DEPLOYMENT.md) để nhập biến môi trường và tạo tài khoản Chủ sở hữu lần đầu. Cấu hình đã được build cục bộ; chưa kiểm thử trên Render/Neon thực tế.

@@ -1,0 +1,63 @@
+# Production stack for a single AWS EC2 instance: Caddy (HTTPS) -> app -> PostgreSQL.
+# Run from this directory:  docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mieu_pos}
+      POSTGRES_USER: ${POSTGRES_USER:-mieu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - /srv/mieu/pgdata:/var/lib/postgresql/data   # lives on the EBS volume, survives container rebuilds
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # No published ports: the database is reachable only from the app container.
+
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      DATABASE_URL: Host=db;Port=5432;Database=${POSTGRES_DB:-mieu_pos};Username=${POSTGRES_USER:-mieu};Password=${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
+      JWT_ACCESS_MINUTES: ${JWT_ACCESS_MINUTES:-15}
+      REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-30}
+      LOGIN_RATE_LIMIT_PER_MINUTE: ${LOGIN_RATE_LIMIT_PER_MINUTE:-20}
+      RUN_MIGRATIONS_ON_START: "true"
+      BOOTSTRAP_OWNER_ON_START: ${BOOTSTRAP_OWNER_ON_START:-false}
+      OWNER_EMAIL: ${OWNER_EMAIL:-}
+      OWNER_NAME: ${OWNER_NAME:-}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      FORWARDED_HEADERS_ENABLED: "true"   # Caddy terminates TLS; needed for Secure cookies and per-IP rate limits
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env.production}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # certificates: keep, or Let's Encrypt rate limits will bite on redeploys
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

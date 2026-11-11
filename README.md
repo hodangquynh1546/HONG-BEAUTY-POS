@@ -21,12 +21,16 @@ Không lưu Owner password hoặc database URL thật vào Git. Bước bootstra
 
 ## Chạy không dùng Docker
 
-- Cần .NET SDK 10, Bun, PostgreSQL.
+- Cần .NET SDK 10, Node.js 22+, PostgreSQL.
 - Cung cấp `DATABASE_URL` và `JWT_SECRET` qua biến môi trường; chạy `dotnet run --project HongBeautyPOSAPI/src/HongBeautyPOS.Api -- --migrate` trước lần đầu.
 - Chạy API bằng `dotnet run --project HongBeautyPOSAPI/src/HongBeautyPOS.Api --launch-profile http` (mặc định cổng 5024).
-- Trong `HongBeautyPOSUI`, chạy `bun install` rồi `bun run start`; proxy `/api` chuyển đến API cổng 5024.
-- Kiểm tra bản dựng: `dotnet build HongBeautyPOSAPI/HongBeautyPOS.slnx` và `bun run build` trong thư mục UI.
+- Trong `HongBeautyPOSUI`, chạy `npm ci` rồi `npm start`; proxy `/api` chuyển đến API cổng 5024.
+- Kiểm tra bản dựng: `dotnet build HongBeautyPOSAPI/HongBeautyPOS.slnx` và `npm run build` trong thư mục UI.
 - Kiểm thử tích hợp trên **database PostgreSQL trống chỉ dành cho test**: sau khi build .NET, đặt `POS_TEST_DATABASE_URL` tới database đó rồi chạy `python3 tests/integration_smoke.py`. Bài test tự tạo Owner ngẫu nhiên và dữ liệu giao dịch; không chạy trên database production. Script chỉ chấp nhận host localhost.
+
+## Kiểm thử e2e
+
+Từ `HongBeautyPOSUI`: `npx playwright install chromium` (một lần) rồi `npm run e2e`. Script dựng PostgreSQL tạm bằng Docker, API phục vụ bản build Angular và chạy Playwright (desktop + mobile). Cần Docker đang chạy; không đụng database thật.
 
 ## Lưu ý triển khai
 

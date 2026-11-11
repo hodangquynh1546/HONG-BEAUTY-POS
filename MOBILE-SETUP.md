@@ -4,15 +4,15 @@ Source Android và iOS nằm trong `HongBeautyPOSUI/android` và `HongBeautyPOSU
 
 ## Cài và đồng bộ source
 
-Máy phát triển cần Bun hoặc npm, môi trường Node.js 22+, Android Studio/Android SDK cho Android. iOS cần macOS và Xcode. Từ `HongBeautyPOSUI`, cài dependency bằng `bun install`, rồi chạy `bun run mobile:sync` sau mỗi lần sửa giao diện. Trong môi trường này đã tạo được cả hai native project và đồng bộ tài nguyên, nhưng chưa build APK/IPA vì thiếu Android SDK/Xcode.
+Máy phát triển cần Node.js 22+ và npm, Android Studio/Android SDK cho Android. iOS cần macOS và Xcode. Từ `HongBeautyPOSUI`, cài dependency bằng `npm ci`, rồi chạy `npm run mobile:sync` sau mỗi lần sửa giao diện. Trong môi trường này đã tạo được cả hai native project và đồng bộ tài nguyên, nhưng chưa build APK/IPA vì thiếu Android SDK/Xcode.
 
 ## Android
 
-Chạy `bun run mobile:android`; dự án mở trong Android Studio. Chọn emulator hoặc thiết bị rồi Run. Khi phát hành, tạo keystore riêng bên ngoài Git, ký bản release và xuất APK/AAB theo Android Studio.
+Chạy `npm run mobile:android`; dự án mở trong Android Studio. Chọn emulator hoặc thiết bị rồi Run. Khi phát hành, tạo keystore riêng bên ngoài Git, ký bản release và xuất APK/AAB theo Android Studio.
 
 ## iOS
 
-Trên máy Mac, chạy `bun run mobile:ios`. Trong Xcode, đặt Apple Team và Bundle ID, chọn simulator hoặc iPhone rồi Run. Phát hành IPA cần tài khoản Apple Developer và cấu hình ký ứng dụng.
+Trên máy Mac, chạy `npm run mobile:ios`. Trong Xcode, đặt Apple Team và Bundle ID, chọn simulator hoặc iPhone rồi Run. Phát hành IPA cần tài khoản Apple Developer và cấu hình ký ứng dụng.
 
 ## Kết nối máy chủ
 

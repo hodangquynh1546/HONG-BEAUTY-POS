@@ -31,3 +31,8 @@ uploads/
 backups/
 __pycache__/
 *.pyc
+
+# Built UI copied next to the API by scripts/e2e.sh and the Dockerfile
+**/HongBeautyPOS.Api/wwwroot/
+**/test-results/
+**/playwright-report/

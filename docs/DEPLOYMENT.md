@@ -9,6 +9,8 @@
    - `JWT_SECRET`: chuỗi ngẫu nhiên riêng, ít nhất 32 ký tự.
    - `OWNER_EMAIL`, `OWNER_NAME`, `OWNER_PASSWORD`: tài khoản Chủ sở hữu ban đầu. Mật khẩu dài ít nhất 14 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.
 
+`FORWARDED_HEADERS_ENABLED=true` (đã đặt sẵn trong `render.yaml`) để giới hạn đăng nhập theo IP thật của khách thay vì IP của proxy Render. Danh sách đầy đủ biến môi trường và ý nghĩa nằm trong `.env.example`.
+
 `BOOTSTRAP_OWNER_ON_START=true` chỉ tạo Chủ sở hữu khi database chưa có ai giữ vai trò đó. Nếu chưa nhập đủ ba biến `OWNER_*`, dịch vụ vẫn khởi động nhưng chưa có tài khoản để đăng nhập; nhập các biến rồi triển khai lại. Sau khi đăng nhập thành công, có thể bỏ `OWNER_PASSWORD` khỏi môi trường và đặt `BOOTSTRAP_OWNER_ON_START=false`; lần khởi động sau sẽ không cần mật khẩu ban đầu. Không dùng cùng database cho test và production.
 
 ## Quên mật khẩu

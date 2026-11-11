@@ -10,6 +10,8 @@ services:
         value: Production
       - key: ASPNETCORE_URLS
         value: http://+:8080
+      - key: FORWARDED_HEADERS_ENABLED
+        value: "true"
       - key: RUN_MIGRATIONS_ON_START
         value: "true"
       - key: BOOTSTRAP_OWNER_ON_START

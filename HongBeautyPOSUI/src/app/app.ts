@@ -4,17 +4,24 @@ import { CurrencyPipe, DecimalPipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ApiService, type CurrentUser, type Employee, type AuditEvent, type Product, type AttributeOption, type StockItem, type StockMovement, type StocktakeSession, type PurchaseReceipt, type SalesOrder, type OrderLine, type OrderReceipt, type ReportSummary, type PaymentMethodReport, type TopProductReport, type DailyReportPoint, type Category, type Customer, type CustomerGroup, type Supplier, type CashEntry } from './core/api.service';
 
-type Page = 'overview' | 'products' | 'categories' | 'customers' | 'suppliers' | 'stock' | 'stocktakes' | 'purchases' | 'pos' | 'orders' | 'cash' | 'reports' | 'employees' | 'audit';
+import { auditActionLabel, cashKindLabel, orderStatusLabel, paymentMethodLabel, permissionLabel, stockMovementTypeLabel } from './core/labels';
+import { formatVietnamTime, vietnamDay } from './core/format';
+import { compressImage } from './core/image';
+import { NAV_ITEMS, pageTitle, type Page } from './core/navigation';
+import { periodRange, type ReportPeriod } from './core/report-period';
+
 type Overlay = 'account' | 'product' | 'supplier' | 'customer' | 'permissions' | 'stock' | 'cash' | 'return' | 'auditDetail' | null;
 
 @Component({
   selector: 'app-root',
   imports: [FormsModule, CurrencyPipe, DecimalPipe],
-  templateUrl: './app.html',
-  styleUrl: './app.scss'
+  templateUrl: './app.html'
 })
 export class App implements OnInit {
   readonly page = signal<Page>('overview');
+  readonly pageTitle = computed(() => pageTitle(this.page()));
+  readonly navItems = computed(() => NAV_ITEMS.filter(item =>
+    !item.access || (item.access === 'owner' ? this.api.user()?.role === 'Owner' : item.access.some(p => this.api.can(p)))));
   readonly sidebarCollapsed = signal(localStorage.getItem('mieu_sidebar_collapsed') === 'true');
   readonly overlay = signal<Overlay>(null);
   readonly confirmation = signal<{ title: string; message: string; action: string } | null>(null);
@@ -155,9 +162,9 @@ export class App implements OnInit {
   returnRefundMethod: 'Cash' | 'BankTransfer' | 'QrBanking' = 'Cash';
   returnQuantity: Record<string, number> = {};
   returnRestock: Record<string, boolean> = {};
-  reportFrom = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
+  reportFrom = vietnamDay();
   reportTo = this.reportFrom;
-  reportPeriod: 'today' | 'yesterday' | 'last7' | 'thisMonth' | 'lastMonth' | 'custom' = 'today';
+  reportPeriod: ReportPeriod = 'today';
 
   constructor(readonly api: ApiService) {}
 
@@ -190,9 +197,7 @@ export class App implements OnInit {
       (!this.purchaseListTo || this.vietnamDate(receipt.createdAt) <= this.purchaseListTo));
   }
 
-  private vietnamDate(value: string): string {
-    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(value));
-  }
+  private vietnamDate(value: string): string { return vietnamDay(value); }
 
   categoryName(id: string | null): string {
     return id ? this.categories().find(category => category.id === id)?.name || '—' : '—';
@@ -286,35 +291,16 @@ export class App implements OnInit {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/') || file.size > 10_000_000) { this.error.set('Chọn ảnh dưới 10 MB.'); input.value = ''; return; }
-    const url = URL.createObjectURL(file);
     this.imageProcessing.set(true);
     try {
-      const photo = new Image();
-      await new Promise<void>((resolve, reject) => {
-        photo.onload = () => resolve();
-        photo.onerror = () => reject(new Error('Không mở được ảnh này. Hãy chọn ảnh JPEG, PNG hoặc WebP.'));
-        photo.src = url;
-      });
-      const scale = Math.min(1, 640 / Math.max(photo.naturalWidth, photo.naturalHeight));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(photo.naturalWidth * scale));
-      canvas.height = Math.max(1, Math.round(photo.naturalHeight * scale));
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('Không xử lý được ảnh.');
-      context.fillStyle = '#fff';
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(photo, 0, 0, canvas.width, canvas.height);
-      let image = canvas.toDataURL('image/jpeg', .78);
-      if (image.length > 210_000) image = canvas.toDataURL('image/jpeg', .55);
-      if (image.length > 210_000) throw new Error('Ảnh sau khi nén vẫn quá lớn. Hãy chọn ảnh đơn giản hơn.');
+      const image = await compressImage(file);
       if (target === 'product') this.newProduct.imageData = image;
       else if (target === 'customer') this.newCustomer.avatarData = image;
       else if (target === 'employee') this.newEmployee.avatarData = image;
       else this.profileAvatarData = image;
       this.error.set('');
     } catch (error) { this.error.set(error instanceof Error ? error.message : 'Không đọc được ảnh.'); }
-    finally { URL.revokeObjectURL(url); input.value = ''; this.imageProcessing.set(false); }
+    finally { input.value = ''; this.imageProcessing.set(false); }
   }
 
   async addQuickCategory(): Promise<void> {
@@ -725,19 +711,7 @@ export class App implements OnInit {
     finally { this.loading.set(false); }
   }
 
-  permissionLabel(permission: string): string {
-    const labels: Record<string, string> = {
-      'products.read': 'Xem sản phẩm', 'products.write': 'Tạo sản phẩm, danh mục',
-      'inventory.read': 'Xem tồn kho', 'inventory.adjust': 'Điều chỉnh và kiểm kho',
-      'purchases.read': 'Xem phiếu nhập', 'purchases.write': 'Tạo và hoàn tất phiếu nhập',
-      'sales.read': 'Xem đơn bán', 'sales.write': 'Bán hàng',
-      'payments.write': 'Nhận thanh toán', 'returns.write': 'Trả hàng và hoàn tiền',
-      'customers.read': 'Xem khách hàng', 'customers.write': 'Tạo khách hàng',
-      'suppliers.read': 'Xem nhà cung cấp', 'suppliers.write': 'Tạo nhà cung cấp',
-      'reports.read': 'Xem báo cáo', 'cash.read': 'Xem thu chi', 'cash.write': 'Ghi phiếu thu chi'
-    };
-    return labels[permission] || permission;
-  }
+  permissionLabel(permission: string): string { return permissionLabel(permission); }
 
   async saveEmployeePermissions(): Promise<void> {
     const employee = this.selectedEmployee();
@@ -964,29 +938,15 @@ export class App implements OnInit {
     finally { this.loading.set(false); }
   }
 
-  formatVietnamTime(value: string): string {
-    return new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
-  }
+  formatVietnamTime(value: string): string { return formatVietnamTime(value); }
 
-  orderStatusLabel(status: string): string {
-    const labels: Record<string, string> = {
-      Unpaid: 'Chưa thanh toán', PartiallyPaid: 'Thanh toán một phần', Paid: 'Đã thanh toán',
-      PartiallyReturned: 'Đã trả một phần', Returned: 'Đã trả toàn bộ', Cancelled: 'Đã hủy'
-    };
-    return labels[status] ?? 'Trạng thái chưa xác định';
-  }
+  orderStatusLabel(status: string): string { return orderStatusLabel(status); }
 
-  paymentMethodLabel(method: string): string {
-    return ({ Cash: 'Tiền mặt', BankTransfer: 'Chuyển khoản', QrBanking: 'QR ngân hàng' } as Record<string, string>)[method] ?? 'Phương thức khác';
-  }
+  paymentMethodLabel(method: string): string { return paymentMethodLabel(method); }
 
-  cashKindLabel(kind: string): string {
-    return ({ OtherIncome: 'Thu khác', OperatingExpense: 'Chi vận hành', SupplierPayment: 'Thanh toán nhà cung cấp', OtherExpense: 'Chi khác' } as Record<string, string>)[kind] ?? 'Giao dịch khác';
-  }
+  cashKindLabel(kind: string): string { return cashKindLabel(kind); }
 
-  stockMovementTypeLabel(type: string): string {
-    return ({ PURCHASE: 'Nhập hàng', SALE: 'Bán hàng', RETURN: 'Trả hàng', ADJUSTMENT: 'Điều chỉnh kho', STOCKTAKE: 'Kiểm kho' } as Record<string, string>)[type] ?? 'Biến động kho';
-  }
+  stockMovementTypeLabel(type: string): string { return stockMovementTypeLabel(type); }
 
   private async loadStockMovements(reset: boolean): Promise<void> {
     const params = new URLSearchParams({ skip: String(reset ? 0 : this.stockMovements().length), take: '50' });
@@ -1126,22 +1086,7 @@ export class App implements OnInit {
     } catch { return [{ label: 'Chi tiết', value: 'Không đọc được nội dung thay đổi.' }]; }
   }
 
-  auditActionLabel(action: string): string {
-    const labels: Record<string, string> = {
-      EMPLOYEE_CREATED: 'Tạo nhân viên', EMPLOYEE_PERMISSIONS_REPLACED: 'Cập nhật quyền nhân viên',
-      EMPLOYEE_PASSWORD_RESET: 'Đặt lại mật khẩu nhân viên', EMPLOYEE_ACTIVATED: 'Mở khóa nhân viên',
-      EMPLOYEE_DEACTIVATED: 'Khóa nhân viên', PRODUCT_UPDATED: 'Sửa sản phẩm',
-      PRODUCT_ACTIVATED: 'Mở bán sản phẩm', PRODUCT_DEACTIVATED: 'Ngừng bán sản phẩm',
-      CATEGORY_UPDATED: 'Sửa danh mục', CATEGORY_ACTIVATED: 'Mở danh mục', CATEGORY_DEACTIVATED: 'Ngừng danh mục',
-      CUSTOMER_UPDATED: 'Sửa khách hàng', CUSTOMER_ACTIVATED: 'Mở khách hàng', CUSTOMER_DEACTIVATED: 'Ngừng khách hàng', CUSTOMER_GROUP_CREATED: 'Tạo nhóm khách hàng',
-      SUPPLIER_UPDATED: 'Sửa nhà cung cấp', SUPPLIER_ACTIVATED: 'Mở nhà cung cấp', SUPPLIER_DEACTIVATED: 'Ngừng nhà cung cấp',
-      SALE_RETURN_CREATED: 'Tạo phiếu trả hàng', CASH_ENTRY_CREATED: 'Ghi phiếu thu chi',
-      PROFILE_UPDATED: 'Cập nhật tài khoản', PASSWORD_CHANGED: 'Đổi mật khẩu',
-      OWNER_PASSWORD_RECOVERED: 'Khôi phục mật khẩu Chủ sở hữu', STOCKTAKE_DRAFT_DELETED: 'Xóa phiên kiểm kho nháp',
-      PRODUCT_CREATED: 'Tạo sản phẩm', CATEGORY_CREATED: 'Tạo danh mục', CUSTOMER_CREATED: 'Tạo khách hàng', SUPPLIER_CREATED: 'Tạo nhà cung cấp'
-    };
-    return labels[action] ?? 'Thao tác hệ thống';
-  }
+  auditActionLabel(action: string): string { return auditActionLabel(action); }
 
   orderNo(orderId: string): string {
     return this.orders().find(order => order.id === orderId)?.orderNo ?? 'đang tải';
@@ -1186,16 +1131,9 @@ export class App implements OnInit {
     finally { this.loading.set(false); }
   }
 
-  async selectReportPeriod(period: 'today' | 'yesterday' | 'last7' | 'thisMonth' | 'lastMonth'): Promise<void> {
+  async selectReportPeriod(period: Exclude<ReportPeriod, 'custom'>): Promise<void> {
     this.reportPeriod = period;
-    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
-    const date = new Date(`${today}T00:00:00Z`);
-    const asDay = (value: Date) => value.toISOString().slice(0, 10);
-    if (period === 'today') { this.reportFrom = today; this.reportTo = today; }
-    if (period === 'yesterday') { date.setUTCDate(date.getUTCDate() - 1); this.reportFrom = asDay(date); this.reportTo = this.reportFrom; }
-    if (period === 'last7') { this.reportTo = today; date.setUTCDate(date.getUTCDate() - 6); this.reportFrom = asDay(date); }
-    if (period === 'thisMonth') { this.reportFrom = today.slice(0, 8) + '01'; this.reportTo = today; }
-    if (period === 'lastMonth') { date.setUTCDate(0); this.reportTo = asDay(date); date.setUTCDate(1); this.reportFrom = asDay(date); }
+    ({ from: this.reportFrom, to: this.reportTo } = periodRange(period));
     await this.loadReport();
   }
 

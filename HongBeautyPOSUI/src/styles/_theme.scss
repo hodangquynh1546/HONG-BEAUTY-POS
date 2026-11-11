@@ -1,0 +1,68 @@
+// Final visual layer: typography, focus, motion and the few surfaces that differ from the base components.
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font-family: inherit; }
+
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; }
+h1 { font-size: 2rem; line-height: 1.15; }
+h2 { font-size: 1.4rem; line-height: 1.25; }
+
+// Money and counts line up in columns.
+td, th, .stat strong, .money-preview, .cart-total strong, .trend-row strong, .cash-trend-row strong,
+.payment-chart-row strong, .product-chart-row strong { font-variant-numeric: tabular-nums; }
+
+.stat strong { font-family: var(--font-display); font-size: 1.7rem; font-weight: 600; }
+.stat span { font-size: .82rem; }
+
+// Keyboard focus is always visible and consistent.
+:focus-visible { outline: 2px solid var(--brand-focus); outline-offset: 2px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; }
+button:disabled { cursor: not-allowed; }
+
+.panel, .stat { border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
+.refresh, .primary, input, select, textarea { border-radius: var(--radius-sm); }
+.refresh { transition: background-color .15s var(--ease), border-color .15s var(--ease); }
+.refresh:hover:not(:disabled) { background: var(--brand-soft); border-color: var(--brand-focus); }
+.primary { transition: background-color .15s var(--ease); }
+.primary:hover:not(:disabled) { background: var(--brand-deep); }
+
+// Sidebar: quiet, with an explicit current-page marker.
+.sidebar { background: var(--brand-deep); }
+.sidebar nav button { transition: background-color .15s var(--ease); }
+.sidebar nav button.active { background: #ffffff1f; box-shadow: inset 3px 0 0 #e6c0cb; }
+.brand small { letter-spacing: .06em; text-transform: none; font-size: .7rem; }
+
+// Overview greeting: plain surface with a brand rule instead of a gradient banner.
+.hero {
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brand);
+  border-radius: var(--radius-md);
+  padding: 24px 28px;
+}
+.hero h2 { font-size: 1.7rem; }
+.hero p { margin: 6px 0 0; color: var(--muted); }
+
+// Dialogs open with a short, purposeful motion.
+.overlay-backdrop { animation: fade-in .16s var(--ease); }
+.overlay-panel { animation: rise-in .2s var(--ease); box-shadow: var(--shadow-overlay); }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(10px); } }
+
+.alert { border-left: 3px solid currentColor; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

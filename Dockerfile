@@ -1,9 +1,9 @@
-FROM oven/bun:1 AS ui-build
+FROM node:22-alpine AS ui-build
 WORKDIR /src/HongBeautyPOSUI
-COPY HongBeautyPOSUI/package.json HongBeautyPOSUI/bun.lock ./
-RUN bun install --frozen-lockfile
+COPY HongBeautyPOSUI/package.json HongBeautyPOSUI/package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY HongBeautyPOSUI/ ./
-RUN bun run build
+RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS api-build
 WORKDIR /src

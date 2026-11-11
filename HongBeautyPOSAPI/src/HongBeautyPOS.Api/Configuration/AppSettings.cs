@@ -12,7 +12,10 @@ internal sealed record AppSettings(
     string[] CorsOrigins,
     bool RunMigrationsOnStart,
     bool BootstrapOwnerOnStart,
-    bool UseForwardedHeaders)
+    bool UseForwardedHeaders,
+    TimeSpan AccessTokenLifetime,
+    TimeSpan RefreshTokenLifetime,
+    int LoginRateLimitPerMinute)
 {
     public const string JwtIssuer = "HongBeautyPOS";
     public const string JwtAudience = "HongBeautyPOSUI";
@@ -32,7 +35,19 @@ internal sealed record AppSettings(
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             RunMigrationsOnStart: Flag(configuration, "RUN_MIGRATIONS_ON_START"),
             BootstrapOwnerOnStart: Flag(configuration, "BOOTSTRAP_OWNER_ON_START"),
-            UseForwardedHeaders: Flag(configuration, "FORWARDED_HEADERS_ENABLED"));
+            UseForwardedHeaders: Flag(configuration, "FORWARDED_HEADERS_ENABLED"),
+            AccessTokenLifetime: TimeSpan.FromMinutes(Number(configuration, "JWT_ACCESS_MINUTES", 15, 1, 1440)),
+            RefreshTokenLifetime: TimeSpan.FromDays(Number(configuration, "REFRESH_TOKEN_DAYS", 30, 1, 365)),
+            LoginRateLimitPerMinute: Number(configuration, "LOGIN_RATE_LIMIT_PER_MINUTE", 20, 1, 100000));
+    }
+
+    private static int Number(IConfiguration configuration, string key, int fallback, int min, int max)
+    {
+        var raw = configuration[key];
+        if (string.IsNullOrWhiteSpace(raw)) return fallback;
+        if (!int.TryParse(raw, out var value) || value < min || value > max)
+            throw new InvalidOperationException($"{key} must be an integer between {min} and {max}");
+        return value;
     }
 
     private static bool Flag(IConfiguration configuration, string key) =>

@@ -13,6 +13,10 @@
 
 `BOOTSTRAP_OWNER_ON_START=true` chỉ tạo Chủ sở hữu khi database chưa có ai giữ vai trò đó. Nếu chưa nhập đủ ba biến `OWNER_*`, dịch vụ vẫn khởi động nhưng chưa có tài khoản để đăng nhập; nhập các biến rồi triển khai lại. Sau khi đăng nhập thành công, có thể bỏ `OWNER_PASSWORD` khỏi môi trường và đặt `BOOTSTRAP_OWNER_ON_START=false`; lần khởi động sau sẽ không cần mật khẩu ban đầu. Không dùng cùng database cho test và production.
 
+## Phiên đăng nhập
+
+Access token sống ngắn (`JWT_ACCESS_MINUTES`, mặc định 15 phút) và được app tự gia hạn bằng refresh token xoay vòng (`REFRESH_TOKEN_DAYS`, mặc định 30 ngày không hoạt động). Mỗi lần gia hạn cấp refresh token mới; dùng lại token cũ sau hơn 15 giây sẽ thu hồi toàn bộ phiên đó. Đổi hoặc đặt lại mật khẩu, khóa tài khoản và đăng xuất đều chấm dứt phiên. Refresh token chỉ lưu dạng băm trong bảng `refresh_tokens`.
+
 ## Quên mật khẩu
 
 - Nhân viên liên hệ Chủ sở hữu. Chủ sở hữu vào **Nhân viên → Phân quyền → Đặt lại mật khẩu**; mật khẩu cũ và phiên đăng nhập cũ hết hiệu lực ngay.

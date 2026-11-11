@@ -10,10 +10,9 @@ namespace HongBeautyPOS.Api.Security;
 
 internal sealed class JwtTokenService(AppSettings settings)
 {
-    private static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
     private readonly SymmetricSecurityKey key = new(Encoding.UTF8.GetBytes(settings.JwtSecret));
 
-    public SecurityKey SigningKey => key;
+    public int ExpiresInSeconds => (int)settings.AccessTokenLifetime.TotalSeconds;
 
     /// <summary>Changes whenever the password changes, which invalidates every previously issued token.</summary>
     public static string PasswordVersion(string passwordHash) =>
@@ -29,7 +28,7 @@ internal sealed class JwtTokenService(AppSettings settings)
                 new Claim(ClaimTypes.Role, user.Role.ToString()),
                 new Claim("pwdv", PasswordVersion(user.PasswordHash))
             ],
-            notBefore: DateTime.UtcNow, expires: DateTime.UtcNow.Add(Lifetime),
+            notBefore: DateTime.UtcNow, expires: DateTime.UtcNow.Add(settings.AccessTokenLifetime),
             signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
         return new JwtSecurityTokenHandler().WriteToken(token);
     }

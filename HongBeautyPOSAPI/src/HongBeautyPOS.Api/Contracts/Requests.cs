@@ -3,6 +3,7 @@ using HongBeautyPOS.Domain;
 namespace HongBeautyPOS.Api.Contracts;
 
 internal sealed record LoginRequest(string Email, string Password);
+internal sealed record RefreshRequest(string? RefreshToken);
 internal sealed record UpdateProfileRequest(string FullName, string? AvatarData);
 internal sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 internal sealed record DailyReportPoint(DateOnly Date, decimal GrossSales, decimal ReturnedSales, decimal NetRevenue,

@@ -19,6 +19,7 @@ internal static class ServiceRegistration
     {
         services.AddSingleton(settings);
         services.AddSingleton<JwtTokenService>();
+        services.AddScoped<RefreshTokenService>();
         services.AddDbContext<PosDbContext>(options => options.UseNpgsql(settings.ConnectionString));
 
         services.AddScoped<IProductRepository, ProductRepository>();
@@ -43,7 +44,7 @@ internal static class ServiceRegistration
             policy.WithOrigins(settings.CorsOrigins).AllowAnyHeader().AllowAnyMethod()));
 
         AddAuthentication(services, settings);
-        AddRateLimiting(services);
+        AddRateLimiting(services, settings);
 
         if (settings.UseForwardedHeaders)
         {
@@ -96,23 +97,29 @@ internal static class ServiceRegistration
         services.AddAuthorization();
     }
 
-    private static void AddRateLimiting(IServiceCollection services) =>
+    private static RateLimitPartition<string> PerIp(HttpContext context, int permits) =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permits,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+
+    private static void AddRateLimiting(IServiceCollection services, AppSettings settings) =>
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            options.AddPolicy(RateLimitPolicies.Login, context => RateLimitPartition.GetFixedWindowLimiter(
-                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 20,
-                    Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 0,
-                    AutoReplenishment = true
-                }));
+            options.AddPolicy(RateLimitPolicies.Login, context => PerIp(context, settings.LoginRateLimitPerMinute));
+            // Token renewal is routine traffic (every access-token lifetime, per device) so it gets a roomier bucket.
+            options.AddPolicy(RateLimitPolicies.Session, context => PerIp(context, Math.Max(120, settings.LoginRateLimitPerMinute)));
         });
 }
 
 internal static class RateLimitPolicies
 {
     public const string Login = "login";
+    public const string Session = "session";
 }
